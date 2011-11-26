@@ -81,7 +81,7 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 
 #define GLB_SET_POOL_SIZE 1024 * 10
 
-#define GLB_LEAF_SIZE 10
+#define GLB_LEAF_SIZE 100
 /* alphanumeric symbols:
    0-9, A-Z, a-z */
 #define GLB_RADIX_BASE 62
