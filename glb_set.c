@@ -8,7 +8,7 @@
 
 /* lookup in index and get offset in set
  * lookup in set and get offset in locsets
- * write locset ofset to *lockset_pointer 
+ * write locset's offset to *lockset_pointer 
  */
 static int 
 glbSet_lookup(struct glbSet *self, const char *id, size_t *locset_pointer)
@@ -17,20 +17,20 @@ glbSet_lookup(struct glbSet *self, const char *id, size_t *locset_pointer)
     int res;
 
     if (DEBUG_LEVEL_3) 
-        printf("Lookup was started in index. id: %c%c%c\n", id[0], id[1], id[2]);
+        printf("Looking up id \"%c%c%c\" in the index...\n", id[0], id[1], id[2]);
 
     res = self->index->lookup(self->index, id, &offset, self->index->root); 
     if (res == glb_NO_RESULTS) return glb_NO_RESULTS;
 
     if (DEBUG_LEVEL_3) 
-        printf("Lookup was started in setfile. offset from index: %d\n", offset);
+        printf("Reading offset \"%d\" from the data file...\n", offset);
    
     res = self->data->lookup(self->data, id, &offset);
     if (res == glb_NO_RESULTS) return glb_NO_RESULTS;
     *locset_pointer = offset;
 
     if (DEBUG_LEVEL_3)
-        printf("Lookup was successfull complited. offset from set: %d\n", *locset_pointer);
+        printf("Lookup success! Offset: %d\n", *locset_pointer);
 
     return glb_OK;
 }
@@ -38,7 +38,7 @@ glbSet_lookup(struct glbSet *self, const char *id, size_t *locset_pointer)
 /*  Add to locset file
  *  Add to set file
  *  Add to index
- *  TODO: if one of these steps fails function must disckard changes
+ *  TODO: if any of these steps fail the function must discard the changes
  */
 static int
 glbSet_add(struct glbSet *self, const char *id, const char *bytecode, size_t bytecode_size)
