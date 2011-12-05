@@ -101,7 +101,7 @@ glbIndexTree_lookup(struct glbIndexTree *self, const char *id, size_t *offset, s
 static int
 glbIndexTree_addElem(struct glbIndexTree *self, const char *id, size_t offset)
 {
-    struct glbIndexTreeNode **tmp;
+   /* struct glbIndexTreeNode **tmp;
     struct glbIndexTreeNode **last;
     
     tmp = &(self->root);
@@ -117,7 +117,28 @@ glbIndexTree_addElem(struct glbIndexTree *self, const char *id, size_t offset)
     (*tmp)->offset = offset;
     self->node_count++;
     if (last) (*last)->right = *tmp;  
-            
+     */
+
+
+    struct glbIndexTreeNode *cur;
+    struct glbIndexTreeNode *last;
+
+    cur = self->root;
+    last = NULL;
+   
+    while (cur) {
+        last = cur;
+        cur = cur->right;
+    }
+
+    cur = self->last++;
+    cur->id = id;
+    cur->right = NULL;
+    cur->left = NULL;
+    cur->offset = offset;
+    cur->parent = last;
+    self->node_count++;
+    if (!self->root) self->root = cur;
     return glb_OK;
 }
 

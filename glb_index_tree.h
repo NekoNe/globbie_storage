@@ -9,10 +9,11 @@ typedef struct glbIndexTreeNode
 {
     struct glbIndexTreeNode *left;
     struct glbIndexTreeNode *right;
-    
+    struct glbIndexTreeNode *parent;
+
     char *id;
     size_t offset;
-    
+    char *id_last;    
     
 } glbIndexTreeNode;
 
