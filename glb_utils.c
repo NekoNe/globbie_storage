@@ -22,7 +22,6 @@ int inc_id(char *id)
     i = GLB_ID_MATRIX_DEPTH - 1;
     begin:
     
-    if (i < 0) return glb_FAIL; 
     if (id[i] == '9') { id[i] = 'A'; return glb_OK;}
     if (id[i] == 'Z') { id[i] = 'a'; return glb_OK;}
     if (id[i] == 'z') { id[i--] = '0'; goto begin; }

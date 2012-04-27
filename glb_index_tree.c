@@ -24,13 +24,18 @@ glbIndexTree_rotate(struct glbIndexTree *self, struct glbIndexTreeNode *tmp)
     struct glbIndexTreeNode *newtop;
     
     /*TODO: only one variable can be used */
-    
     oldtop = tmp->right;
     newtop = oldtop->right;
     
     tmp->right = tmp->right->right;
+    if (tmp->right) tmp->right->parent = tmp; 
+
     oldtop->right = newtop->left;
+    if (oldtop->right) oldtop->right->parent = oldtop; 
+    
     newtop->left = oldtop;
+    if (newtop->left) newtop->left->parent = newtop;
+    
     return glb_OK;
 }
 
@@ -38,8 +43,13 @@ static int
 glbIndexTree_rotate_root(struct glbIndexTree *self, struct glbIndexTreeNode *tmp)
 {
     self->root = tmp->right;
+    self->root->parent = NULL; 
+
     tmp->right = self->root->left;
+    if (tmp->right) tmp->right->parent = tmp; 
+
     self->root->left  = tmp;
+    if (self->root->left)self->root->left->parent = self->root; 
     
     return glb_OK;
 }
@@ -58,12 +68,12 @@ glbIndexTree_update(struct glbIndexTree *self, struct glbIndexTreeNode *tmp)
         self->rotate(self, tmp);
         
     difference = self->height(self, tmp->right) - self->height(self, tmp->left);
-    
     if (difference != 2) return glb_IDXT_NTD; /* nothing to do */
 
     if (tmp != self->root) return glb_IDXT_NEED_ROTATE; /* I don't know how to name 2. it will be 2 always */
     self->rotate_root(self, tmp);     
-    
+
+    return glb_OK;
 }
 
 static int 
@@ -78,48 +88,26 @@ glbIndexTree_lookup(struct glbIndexTree *self, const char *id, size_t *offset, s
 
     if (cmp_res == glb_LESS) {
         lookup_res = self->lookup(self, id, offset, tmp->right);
-       
+        
         if (lookup_res == glb_OK) {
             return glb_OK;
         }
-
         if (lookup_res == glb_NO_RESULTS) {
             *offset = tmp->offset;
             return glb_OK;
         }
     }
-    
     if (cmp_res == glb_MORE) {
         lookup_res = self->lookup(self, id, offset, tmp->left);
         return lookup_res; 
     }
-
-   *offset = tmp->offset;
-   return glb_OK; 
+    *offset = tmp->offset;
+    return glb_OK; 
 }
 
 static int
 glbIndexTree_addElem(struct glbIndexTree *self, const char *id, size_t offset)
 {
-   /* struct glbIndexTreeNode **tmp;
-    struct glbIndexTreeNode **last;
-    
-    tmp = &(self->root);
-    last = NULL;
-    while (*tmp) {
-        last = tmp;
-        tmp = &(*tmp)->right;    
-    }
-    *tmp = self->last++;
-    (*tmp)->id = id;
-    (*tmp)->right = NULL;
-    (*tmp)->left = NULL;
-    (*tmp)->offset = offset;
-    self->node_count++;
-    if (last) (*last)->right = *tmp;  
-     */
-
-
     struct glbIndexTreeNode *cur;
     struct glbIndexTreeNode *last;
 
@@ -133,10 +121,12 @@ glbIndexTree_addElem(struct glbIndexTree *self, const char *id, size_t offset)
 
     cur = self->last++;
     cur->id = id;
+    cur->id_last = NULL;
     cur->right = NULL;
     cur->left = NULL;
     cur->offset = offset;
-    cur->parent = last;
+    cur->parent = last; /* set parent */
+    if (last) last->right = cur;
     self->node_count++;
     if (!self->root) self->root = cur;
     return glb_OK;
@@ -145,20 +135,25 @@ glbIndexTree_addElem(struct glbIndexTree *self, const char *id, size_t offset)
 static int
 glbIndexTree_del(struct glbIndexTree *self)
 {
-    /*TODO*/
+    if (!self) return glb_OK;
+
+    if (!self->array) return glb_OK;
+    
+    free(self->array);
+    free(self);
+
     return glb_OK;
 }
 
 static int
 glbIndexTree_init(struct glbIndexTree *self)
 {
-    /* TODO: do not allocate all memory at a time and check allocation was ok */
-    self->array = malloc((GLB_RADIX_BASE * GLB_RADIX_BASE * GLB_RADIX_BASE / GLB_LEAF_SIZE) * sizeof(struct glbIndexTreeNode));
     self->last = self->array;
     self->array_offset = 0;
     self->root = NULL;
-    
+     
     self->node_count = 0;
+    self->max_height = 0;
 
     self->init = glbIndexTree_init;
     self->del = glbIndexTree_del;
@@ -173,17 +168,39 @@ glbIndexTree_init(struct glbIndexTree *self)
     return glb_OK;
 }
 
-
 int glbIndexTree_new(struct glbIndexTree **rec)
 {
     struct glbIndexTree *self;
+    size_t i;
+    int result;
+    
+    result = glb_NOMEM;
 
     self = malloc(sizeof(glbIndexTree));
     if (!self) return glb_NOMEM;
-    
-    glbIndexTree_init(self);
 
+    self->array = NULL;
+
+    self->array = malloc((GLB_ID_MAX_COUNT / GLB_LEAF_SIZE) * sizeof(struct glbIndexTreeNode));
+    if (!self->array) goto error;
+
+    for (i = 0; i < GLB_ID_MAX_COUNT / GLB_LEAF_SIZE; i++) {
+        self->array[i].left = NULL;
+        self->array[i].right = NULL;
+        self->array[i].parent = NULL;
+        self->array[i].id = NULL;
+        self->array[i].id_last = NULL;
+        self->array[i].offset = 0;
+    }
+
+    result = glbIndexTree_init(self);
     *rec = self;
+    if (result) goto error;
 
     return glb_OK;
+
+error:
+    glbIndexTree_del(self);
+    return result;
 }
+

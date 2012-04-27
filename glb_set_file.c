@@ -4,9 +4,58 @@
 #include <sys/stat.h>
 #include <string.h>
 
-
-#include "glb_set.h"
+#include "glb_set_file.h"
 #include "glb_config.h"
+
+static int
+glbSetFile_create_files(struct glbSetFile *self)
+{
+    int fd;
+    char info;
+
+    info = sizeof(size_t);
+    
+    fd = open(self->path_set, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
+    if (fd < 0) return glb_IO_FAIL;
+    close(fd);
+
+    fd = open(self->path_locset, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
+    if (fd < 0) return glb_IO_FAIL;
+    close(fd);
+    
+    fd = open(self->path_set, O_WRONLY | O_TRUNC | O_CREAT);
+    if (fd < 0) return glb_IO_FAIL;
+    write(fd, &info, 1);
+    close(fd);
+    
+    fd = open(self->path_locset, O_WRONLY | O_TRUNC | O_CREAT);
+    if (fd < 0) return glb_IO_FAIL;
+    write(fd, &info, 1);
+    close(fd);
+
+    return glb_OK;
+}
+
+static int
+glbSetFile_buffering(struct glbSetFile *self, size_t offset, char *buffer, size_t size, size_t *result)
+{
+    int fd;
+    size_t res;
+
+    fd = open(self->path_set, O_RDONLY);
+    if (fd < 0) {
+        close(fd);
+        return glb_IO_FAIL;
+    }
+    
+    lseek(fd, offset, SEEK_SET);
+    res = read(fd, buffer, size);
+    
+    *result = res; 
+    
+    close(fd); 
+    return glb_OK;
+}
 
 static int
 glbSetFile_lookupInBuffer(struct glbSetFile *self, const char *id, size_t *offset, size_t buff_size)
@@ -21,7 +70,7 @@ glbSetFile_lookupInBuffer(struct glbSetFile *self, const char *id, size_t *offse
             return glb_OK;
         }
     }
-    if (DEBUG_LEVEL_4)
+    if (GLB_DEBUG_LEVEL_4)
         printf("    ID was not found in set\n");
     return glb_NO_RESULTS;
 }
@@ -33,7 +82,7 @@ glbSetFile_lookup(struct glbSetFile *self, const char *id, size_t *offset)
     int res;
     size_t buff_size;
 
-    if (DEBUG_LEVEL_4)
+    if (GLB_DEBUG_LEVEL_4)
         printf("    Lookup in file started.\n");
     
     fd = open(self->path_set, O_RDONLY); 
@@ -43,7 +92,7 @@ glbSetFile_lookup(struct glbSetFile *self, const char *id, size_t *offset)
     buff_size = read(fd, self->buffer, self->buffer_size);
     close(fd);
 
-    if (DEBUG_LEVEL_4) 
+    if (GLB_DEBUG_LEVEL_4) 
         printf("    Buffer was read from file. Buffer size: %d\n", buff_size);
     return  self->lookupInBuffer(self, id, offset, buff_size);
 }
@@ -98,12 +147,17 @@ glbSetFile_addByteCode(struct glbSetFile *self, const char *bytecode, size_t byt
 static int 
 glbSetFile_del(struct glbSetFile *self)
 {
-    /* TODO */
+    if (!self) return glb_OK;
+
+    if (self->buffer) free(self->buffer);
+
+    free(self);
+
     return glb_OK;
 }
 
 static int
-glbSetFile_init(struct glbSetFile *self)
+glbSetFile_init(struct glbSetFile *self, const char *name, const char *env_path)
 {
     self->init = glbSetFile_init;
     self->del = glbSetFile_del;
@@ -112,22 +166,54 @@ glbSetFile_init(struct glbSetFile *self)
     self->addId = glbSetFile_addId;
     self->lookup = glbSetFile_lookup;
     self->lookupInBuffer = glbSetFile_lookupInBuffer;
+    self->buffering = glbSetFile_buffering;
+    self->create_files = glbSetFile_create_files;
+
+    /* 5 means len of .set\0 */
+    if (strlen(name)  + 5 > GLB_NAME_LENGTH)
+        return glb_FAIL;
+    strcpy(self->path_set, name);
+    strcat(self->path_set, ".set");
+
+    /* 8 means len of .locset\0 */
+    if (strlen(name)  + 8 > GLB_NAME_LENGTH)
+        return glb_FAIL;
+    strcpy(self->path_locset, name);
+    strcat(self->path_locset, ".locset");
+
+    self->create_files(self);
 
     return glb_OK; 
 }
 
-int glbSetFile_new(struct glbSetFile **rec)
+int glbSetFile_new(struct glbSetFile **rec, const char *name, const char *env_path)
 {
     struct glbSetFile *self;
+    size_t size;
+    int result;
 
     self = malloc(sizeof(struct glbSetFile));
     if (!self) return glb_NOMEM;
-    self->buffer = malloc((GLB_ID_MATRIX_DEPTH * sizeof(char) + sizeof(size_t)) * GLB_LEAF_SIZE);
-    if (!self->buffer) return glb_NOMEM;
-    self->buffer_size = (GLB_ID_MATRIX_DEPTH * sizeof(char) + sizeof(size_t)) * GLB_LEAF_SIZE; /*do not mul twice */
+    
+    memset(self->path_set, 0, GLB_NAME_LENGTH);
+    memset(self->path_locset, 0, GLB_NAME_LENGTH);
+    
+    self->buffer = NULL;
+    self->buffer_size = 0;
+    
+    size = (GLB_ID_MATRIX_DEPTH * sizeof(char) + GLB_SIZE_OF_OFFSET) * GLB_LEAF_SIZE;
 
-    glbSetFile_init(self);
+    self->buffer = malloc(size);
+    
+    if (!self->buffer) return glb_NOMEM;
+    self->buffer_size = size;
+
+    result = glbSetFile_init(self, name, env_path);
+    if (result) goto error;
     *rec = self;
 
     return glb_OK;
+error:
+    glbSetFile_del(self);
+    return result;
 }
