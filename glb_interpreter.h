@@ -41,7 +41,7 @@ struct glbFunction
 {
     size_t arg_count;
 
-    int (*func)(struct glbStack *stack, size_t argc, char **argv);
+    int (*func)(void *control, struct glbStack *stack, size_t argc, char **argv);
 
 } glbFunction;
 
@@ -51,6 +51,8 @@ struct glbInterpreter
     /* function names and its addresses */
     struct ooDict *functions; 
     struct glbStack *stack;
+
+    void *control;
 
     /* result of tokeniztion */
     char **tokens; 

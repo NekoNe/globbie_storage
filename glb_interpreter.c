@@ -158,7 +158,7 @@ glbInterpreter_interpret(struct glbInterpreter *self, char *tape)
             }
             argv[i] = tmp;
         }
-        func->func(stack, func->arg_count, argv); 
+        func->func(self->control, stack, func->arg_count, argv); 
         
         if (argv) {
             for (i = 0; i < func->arg_count; i++) 
@@ -226,6 +226,8 @@ glbInterpreter_init(struct glbInterpreter *self)
 
     self->func_keyword = '@';
     self->eol = '\0';
+
+    self->control = NULL;
 
     return glb_OK;
 }

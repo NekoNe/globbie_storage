@@ -42,6 +42,7 @@ typedef struct glbCollection
     char *cur_id; /* next document id */
     char *key_id;
     char **id_pool;
+    size_t id_count;
 
     /* Dictionary with sets and their names(keys) (name : set) */
     struct ooDict *dict;
