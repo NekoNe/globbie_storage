@@ -52,8 +52,10 @@ typedef struct glbCollection
     
     /**********  interface methods  **********/
     
-    int (*newDocument)(struct glbCollection *self, char *bytecode, size_t bytecode_size);  
-    int (*findDocuments)(struct glbCollection *self, char *bytecode, size_t bytecode_size);
+    int (*newDocument)(struct glbCollection *self, 
+		       struct glbAddRequest *request);  
+    int (*findDocuments)(struct glbCollection *self, 
+			 struct glbSearchRequest *request);
 
     int (*init)(struct glbCollection *self);
     int (*del)(struct glbCollection *self);
@@ -76,5 +78,5 @@ typedef struct glbCollection
 
 } glbCollection;
 
-extern char * glbCollection_process(struct glbCollection *self, char *msg); 
+extern const char* glbCollection_process(struct glbCollection *self, const char *msg); 
 extern int glbCollection_new(struct glbCollection **self);

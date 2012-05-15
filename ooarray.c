@@ -50,6 +50,7 @@ ooArray_del(struct ooArray *self)
     return oo_OK;
 }
 
+
 static int
 ooArray_set_item(struct ooArray *self,
 		 void    *data,
@@ -90,13 +91,14 @@ ooArray_add(struct ooArray *self,
     unsigned int i;
     void **data;
 
+
     if (pos >= self->size)
-        return NULL;
+        return oo_FAIL;
 
     data = (void**)realloc(self->data, 
 			   sizeof(void*) * (self->size + 1));
 
-    if (!data) return NULL;
+    if (!data) return oo_NOMEM;
 
     for (i = pos + 1; i < self->size + 1; i++)
         data[i] = data[i - 1];
@@ -109,15 +111,14 @@ ooArray_add(struct ooArray *self,
     return oo_OK;
 }
 
-static
-void  ooArray_push(struct ooArray *self,
+static int 
+ooArray_push(struct ooArray *self,
                    void    *val)
 {
-    ooArray_add(self, val, self->size);
+    return ooArray_add(self, val, self->size);
 }
 
-static
-struct ooArray* 
+static struct ooArray* 
 ooArray_get_subsequence(struct ooArray *self,
 			size_t start,
 			size_t length)
@@ -126,7 +127,7 @@ ooArray_get_subsequence(struct ooArray *self,
 
     struct ooArray *res;
     ret = ooArray_new(&res);
-    if (ret != oo_OK) return ret;
+    if (ret != oo_OK) return NULL;
 
     if (start > length)
         return res;
@@ -164,22 +165,28 @@ ooArray_remove(struct ooArray *self,
     return oo_OK;
 }
 
-static
-void* 
+static int
 ooArray_pop(struct ooArray *self)
 {
     return ooArray_remove(self, self->size - 1);
 }
 
-static void 
+static int
 ooArray_resize(struct ooArray *self,
 	       size_t new_size)
 {
+    void **data;
     unsigned int size = self->size;
     self->size = new_size;
-    self->data  = (void**)realloc(self->data, self->size * sizeof(void*));
+
+    data  = (void**)realloc(self->data, self->size * sizeof(void*));
+    if (!data) return oo_NOMEM;
+
+    self->data = data;
     if (size < new_size)
         memset(self->data + size, 0, (new_size - size) * sizeof(void*));
+
+    return oo_OK;
 }
 
 static void 

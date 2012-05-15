@@ -7,10 +7,19 @@
 
 #define GLB_STACK_BLOCK_SIZE 10
 
+typedef enum gsl_elem_type { 
+                         GSL_NAME,
+                         GSL_LIST,
+                         GSL_DICT,
+                         GSL_TOPIC,
+                         GSL_ATTR } gsl_elem_type;
 
 struct glbStackElem
 {
+    gsl_elem_type type;
+    void *elem;
     char *record;
+
     /* previous stack top */ 
     struct glbStackElem *prev;
 
@@ -23,7 +32,7 @@ struct glbStack
 
     /********** public methods **********/
 
-    int (*push)(struct glbStack *self, char *elem, size_t length);
+    int (*push)(struct glbStack *self, const char *elem, size_t length);
     int (*pop)(struct glbStack *self, char **elem);
 
     int (*init)(struct glbStack *self);
@@ -69,14 +78,16 @@ struct glbInterpreter
 
     /********** public methods **********/
 
-    int (*interpret)(struct glbInterpreter *self, char *tape);
+    int (*interpret)(struct glbInterpreter *self, const char *tape);
 
     int (*init)(struct glbInterpreter *self);
     int (*del)(struct glbInterpreter *self);
 
     /********** private methods **********/
 
-    int (*next_token)(struct glbInterpreter *self, char *tape, size_t *pozition, size_t *length);
+    int (*next_token)(struct glbInterpreter *self, 
+		      const char *tape, size_t *pozition, size_t *length);
+
     int (*is_separator)(struct glbInterpreter *self, char ch);
 
 } glbInterpreter;

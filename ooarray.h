@@ -37,25 +37,25 @@ typedef struct ooArray
     int (*del)(struct ooArray *self);
 
     /* add a value at specific position */
-    void (*add)(struct ooArray *self,
+    int (*add)(struct ooArray *self,
                 void           *val,
                 size_t        pos);
 
     /* add a value to the end of the array */
-    void (*push)(struct ooArray *self,
+    int (*push)(struct ooArray *self,
                  void           *val);
 
     /* delete an item */
     int (*remove)(struct ooArray *self,
 		  size_t pos);
 
-    /* delete the last value */
-    void* (*pop)(struct ooArray *self);
+    /* return and delete the last value */
+    int (*pop)(struct ooArray *self);
 
     /* set the item of the array (check the position) */
-    void* (*set_item)(struct ooArray *self,
-                      void *data,
-                      size_t pos);
+    int (*set_item)(struct ooArray *self,
+		    void *data,
+		    size_t pos);
 
     /* get the element of array (check the position) */
     void* (*get_item)(struct ooArray *self,
@@ -69,8 +69,8 @@ typedef struct ooArray
                                        size_t start,
                                        size_t length);
     /* set the new size */
-    void (*resize)(struct ooArray *self,
-                   size_t        new_size);
+    int (*resize)(struct ooArray *self,
+		  size_t        new_size);
 
     /* sort the array */
     void (*sort)(struct ooArray *self,
