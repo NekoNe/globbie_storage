@@ -10,7 +10,7 @@
 #include "glb_config.h"
 #include "glb_collection.h"
 
-#define NUM_WORKERS 1
+#define NUM_WORKERS 4
 
 struct worker_args {
     int worker_id;
@@ -26,7 +26,7 @@ void *worker_routine(void *arg)
     void *client;
     void *outbox;
     char *msg;
-    char *result;
+    const char *result;
     int ret;
 
     args = (struct worker_args*)arg;
@@ -39,9 +39,11 @@ void *worker_routine(void *arg)
     while (1) {
         msg = s_recv(client);
         printf("Worker #%d: processing message \"%s\"...\n", 
-            args->worker_id, msg);
+                args->worker_id, msg);
 
-        result = glbCollection_process((void*)collection, (const char*)msg);
+        result = glbCollection_process((void*)collection,
+                       (const char*)msg);
+
         printf("RESULT: %s\n", result);
 
         s_send(client, result);
@@ -71,12 +73,6 @@ main(int           const argc,
     int i, ret;
 
     struct worker_args w_args[NUM_WORKERS];
-
-    /* initialize poll set */
-    zmq_pollitem_t items [] = {
-      { frontend, 0, ZMQ_POLLIN, 0 },
-      { backend, 0, ZMQ_POLLIN, 0 }
-    };
 
     //if (argc-1 != 1) {
     //    fprintf(stderr, "You must specify 1 argument:  "

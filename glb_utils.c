@@ -30,38 +30,12 @@ int inc_id(char *id)
     return glb_OK;
 }
 
-char *max_id(const char *a, const char *b)
+const char *max_id(const char *a, const char *b)
 {
-    return compare(a, b) == glb_MORE ? a : b;
+    return (compare(a, b) == glb_MORE) ? a : b;
 }
-char *min_id(const char *a, const char *b)
+
+const char *min_id(const char *a, const char *b)
 {
     return compare(a, b) == glb_LESS ? a : b;
 }
-
-/*  intersects 2 id intervals and retruns 1 id interval
- *  return value: 1 to the left then 2
- *  less means left to the ... here
- */
-
-int glb_intersection(const char *aid, const char *bid, const char *cid, const char *did, char *left, char *right)
-{
-    
-    char *rleft;
-    char *rright;
-    int res;
-
-    rleft = max_id(aid, cid);
-    rright = min_id(bid, did);
-
-    res = compare(rleft, rright); 
-    
-    if (res == glb_MORE) return glb_NOT_COMPARABLE;
-    left = rleft;
-    right = rright;
-    return compare(did, bid) == glb_MORE ? glb_LESS : glb_MORE;
-}
-
-
-
-

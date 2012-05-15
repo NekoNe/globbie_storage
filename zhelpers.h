@@ -86,7 +86,7 @@ s_recv (void *socket) {
 
 //  Convert C string to 0MQ string and send to socket
 static int
-s_send (void *socket, char *string) {
+s_send (void *socket, const char *string) {
     int rc;
     zmq_msg_t message;
     zmq_msg_init_size (&message, strlen (string));
@@ -98,7 +98,7 @@ s_send (void *socket, char *string) {
 
 //  Sends string as 0MQ string, as multipart non-terminal
 static int
-s_sendmore (void *socket, char *string) {
+s_sendmore (void *socket, const char *string) {
     int rc;
     zmq_msg_t message;
     zmq_msg_init_size (&message, strlen (string));
