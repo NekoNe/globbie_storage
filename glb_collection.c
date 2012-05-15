@@ -69,7 +69,8 @@ glbCollection_addDocToSet(struct glbCollection *self, char *name)
 }
 
 static int
-glbCollection_findDocuments(struct glbCollection *self, struct glbSearchRequest *request)
+glbCollection_findDocuments(struct glbCollection *self, 
+			    struct glbSearchRequest *request)
 {
     int res;
     struct glbRequestHandler *request_handler;
@@ -247,7 +248,8 @@ glbCollection_findDocs(void *control, struct glbStack *stack, size_t argc, char 
     
 }
 
-char* glbCollection_process(struct glbCollection *self, char *msg)
+const char* glbCollection_process(struct glbCollection *self, 
+				  const char *msg)
 {
     struct glbInterpreter *interpreter;
     struct glbFunction addDoc, findDocs;
@@ -270,7 +272,7 @@ char* glbCollection_process(struct glbCollection *self, char *msg)
 
     result = interpreter->interpret(interpreter, msg);
     if (result) return "interpretation error";
-
+    
     return "OK";
 }
 

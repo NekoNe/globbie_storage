@@ -1,4 +1,4 @@
-﻿#include <stdio.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "glb_config.h"
@@ -10,9 +10,9 @@ typedef struct glbIndexTreeNode
     struct glbIndexTreeNode *right;
     struct glbIndexTreeNode *parent;
 
-    char *id;
+    const char *id;
     size_t offset;
-    char *id_last;    
+    const char *id_last;    
     
 } glbIndexTreeNode;
 

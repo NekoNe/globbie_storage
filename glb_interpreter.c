@@ -16,7 +16,6 @@ glbStack_pop(struct glbStack *self, char **elem)
     if (!self->top) return glb_EOB;
 
     length = strlen(self->top->record);
-    
 
     string = malloc((length + 1) * sizeof(char));
     if (!string) return glb_EOB;
@@ -35,7 +34,8 @@ glbStack_pop(struct glbStack *self, char **elem)
 }
 
 static int
-glbStack_push(struct glbStack *self, char *elem, size_t length)
+glbStack_push(struct glbStack *self, 
+	      const char *elem, size_t length)
 {
     struct glbStackElem *tmp;
 
@@ -98,7 +98,8 @@ error:
 }
 
 static int 
-glbInterpreter_interpret(struct glbInterpreter *self, char *tape)
+glbInterpreter_interpret(struct glbInterpreter *self, 
+			 const char *tape)
 {
     int result, i;
     size_t position, length; /* of token */
@@ -158,6 +159,7 @@ glbInterpreter_interpret(struct glbInterpreter *self, char *tape)
             }
             argv[i] = tmp;
         }
+
         func->func(self->control, stack, func->arg_count, argv); 
         
         if (argv) {
@@ -166,11 +168,13 @@ glbInterpreter_interpret(struct glbInterpreter *self, char *tape)
             free(argv);
         }
     }
+
     return glb_OK;
 }
 
 static int
-glbInterpreter_next_token(struct glbInterpreter *self, char *tape, size_t *position, size_t *length)
+glbInterpreter_next_token(struct glbInterpreter *self, 
+			  const char *tape, size_t *position, size_t *length)
 {
     size_t i, begin;
 
