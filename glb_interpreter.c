@@ -246,7 +246,7 @@ int glbInterpreter_new(struct glbInterpreter **rec)
     if (!self) return glb_NOMEM;
     
 
-    result = ooDict_new(&func);
+    result = ooDict_new(&func, GLB_SMALL_DICT_SIZE);
     if (result) goto error;
     self->functions = func;
 

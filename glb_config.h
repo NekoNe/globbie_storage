@@ -102,4 +102,17 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 
 #define UCHAR_NUMVAL_RANGE (unsigned char)-1 + 1
 
+/* hash table sizes */
+#define GLB_HUGE_DICT_SIZE 100000
+#define GLB_LARGE_DICT_SIZE 10000
+#define GLB_MEDIUM_DICT_SIZE 1000
+#define GLB_SMALL_DICT_SIZE 100
+#define GLB_TINY_DICT_SIZE 10
+
+
+#define GLB_MAZE_ITEM_STORAGE_SIZE 1024 * 1024
+#define GLB_MAZE_SPEC_STORAGE_SIZE 1024 * 1024
+#define GLB_MAZE_LOC_STORAGE_SIZE 1024 * 1024
+#define GLB_MAZE_MAX_DEPTH 3
+
 #endif

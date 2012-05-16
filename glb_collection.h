@@ -34,49 +34,40 @@ typedef struct glbSearchRequest
 
 } glbSearchRequest;
 
-typedef struct glbCollection
+typedef struct glbColl
 {
     char *name;
     char *env_path;
 
-    char *cur_id; /* next document id */
+    char *cur_id; /* next obj id */
     char *key_id;
     char **id_pool;
     size_t id_count;
 
-    /* Dictionary with sets and their names(keys) (name : set) */
-    struct ooDict *dict;
+    /* concept index */
+    struct glbMaze *maze;
+
+    /* set index (name: set) */
+    struct ooDict *set_index;
     
     /* (ID : URL) dictionary */
     struct ooDict *storage;
     
     /**********  interface methods  **********/
-    
-    int (*newDocument)(struct glbCollection *self, 
-		       struct glbAddRequest *request);  
-    int (*findDocuments)(struct glbCollection *self, 
-			 struct glbSearchRequest *request);
+    int (*del)(struct glbColl *self);
+    int (*str)(struct glbColl *self);
+   
+    int (*add)(struct glbColl *self,
+	       const char *spec,
+	       const char *obj);
 
-    int (*init)(struct glbCollection *self);
-    int (*del)(struct glbCollection *self);
-    int (*print)(struct glbCollection *self);
+    int (*find)(struct glbColl *self,
+		const char *spec,
+		const char *request);
 
-    /**********  internal methods  **********/
 
-    int (*tconcept_to_sets)(struct glbCollection *self, char *index, struct glbSet **pool);   
-    int (*tconcept_transform)(struct glbCollection *self, char *index, struct glbSet **pool);   
-    
-    int (*newSet)(struct glbCollection *self, char *name, struct glbSet **answer);
-    int (*findSet)(struct glbCollection *self, char *name, struct glbSet **set); 
-    
-    int (*addDocToSet)(struct glbCollection *self, char *name);
-    /* makes response */
-    int (*encode)(struct glbCollection *self, char *result, size_t result_size, char *bytecode, size_t bytecode_size);
-    
-    /* decode request */
-    int (*decode)(struct glbCollection *self, char *bytecode, size_t bytecode_size, char **name, char *url); 
 
-} glbCollection;
+} glbColl;
 
-extern const char* glbCollection_process(struct glbCollection *self, const char *msg); 
-extern int glbCollection_new(struct glbCollection **self);
+extern const char* glbColl_process(struct glbColl *self, const char *msg); 
+extern int glbColl_new(struct glbColl **self);
