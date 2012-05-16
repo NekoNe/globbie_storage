@@ -78,12 +78,18 @@ typedef struct glbRequestHandler
 
     /*********** internal mathods **********/
 
-    /* takes next id from zero_buffer. writes it in *id */ 
+    /* takes next id from zero_buffer. writes it into *id */ 
     int (*next_id)(struct glbRequestHandler *self);
+
     /* loading new part of set to zero_buffer */
     int (*buffering)(struct glbRequestHandler *self);
-    /* looking up IndexNode there id presents */
-    int (*lookup)(struct glbRequestHandler *self, struct glbIndexTreeNode *marker, char *id, struct glbIndexTreeNode **node);
+
+    /* looking up IndexNode of specific id  */
+    int (*lookup)(struct glbRequestHandler *self, 
+		  struct glbIndexTreeNode *marker, 
+		  const char *id, 
+		  struct glbIndexTreeNode **node);
+
     /* intersects buffer of ids */
     int (*leaf_intersection)(struct glbRequestHandler *self);
 

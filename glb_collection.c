@@ -29,21 +29,23 @@ glbColl_tconcept_to_sets(struct glbColl *self, char *bytecode, struct glbSet **s
 }
 
 static int
-glbColl_add(struct glbColl *self, 
-		  struct glbAddRequest *request)
+glbColl_add(struct glbColl *self,
+	    const char *spec,
+	    const char *obj)
 {
     int fd;
     size_t res;
 
     /*  I. transforming terminal concepts to set addresses*/
     
-    glbColl_tconcept_to_sets(self, request->concept_index, request->set_pool);
+    /*glbColl_tconcept_to_sets(self, request->concept_index, request->set_pool);*/
 
-    /* III. saving doc */
+
+    /* save original object */
 
     memcpy(self->key_id, self->cur_id, GLB_ID_MATRIX_DEPTH); /* adding '\0' */
     
-    fd = open(self->key_id, O_RDWR);
+    /*fd = open(self->key_id, O_RDWR);
     if (fd < 0) return glb_IO_FAIL;
 
     res = write(fd, request->source_string, request->source_string_size);
@@ -53,6 +55,8 @@ glbColl_add(struct glbColl *self,
         return glb_IO_FAIL; 
 
     inc_id(self->cur_id);     
+    */
+
 
     return glb_OK;
 }
@@ -75,7 +79,8 @@ glbColl_addDocToSet(struct glbColl *self, char *name)
 
 static int
 glbColl_find(struct glbColl *self, 
-	     struct glbSearchRequest *request)
+	     const char *spec,
+	     const char *request)
 {
     int res;
     struct glbRequestHandler *request_handler;
@@ -89,16 +94,18 @@ glbColl_find(struct glbColl *self,
     /*  II. intersecting sets */
     /* TODO: init request_handler */
     
-intersection:
+    /*intersection:
 
     request_handler->intersect(request_handler);
-    
+    */
+
     /* III. intersecting result_table. if results too few goto II */
     
     /*res = request_handler->locset_intersection(request_handler);*/
 
-    if ((res != glb_STOP) && (request_handler->result_size < request->result_size))
+    /*    if ((res != glb_STOP) && (request_handler->result_size < request->result_size))
         goto intersection;
+    */
 
     /* IV. got answer*/
 
@@ -132,7 +139,6 @@ glbColl_newSet(struct glbColl *self, char *name, struct glbSet **answer)
 static int
 glbColl_findSet(struct glbColl *self, char *name, struct glbSet **set)
 {
-
     *set = self->set_index->get(self->set_index, name);
     return glb_OK;
 }
@@ -211,6 +217,7 @@ glbColl_findDocs(void *control, struct glbStack *stack, size_t argc, char **argv
     set_pool = NULL;
     begin = 0;
     i = 0;
+
     while (i < len) {
         if (argv[0][i] != '#') { i++; continue; }
         
@@ -310,8 +317,8 @@ glbColl_init(struct glbColl *self)
     self->str = glbColl_str;
     self->del = glbColl_del;
 
-    /*self->add = glbColl_add;
-      self->find = glbColl_find;*/
+    self->add = glbColl_add;
+    self->find = glbColl_find;
 
     /* first id */
     self->id_pool[0][0] = '0'; 

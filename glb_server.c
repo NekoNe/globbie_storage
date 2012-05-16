@@ -90,7 +90,7 @@ main(int           const argc,
     //    exit(1);
     //}
     //config_filename = argv[1];
-        
+
     ret = glbColl_new(&collection);
     if (ret) {
         fprintf(stderr, "Couldn\'t load glbColl... ");

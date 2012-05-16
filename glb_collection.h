@@ -3,37 +3,6 @@
 
 #include "glb_config.h"
 
-typedef struct glbAddRequest
-{
-    struct glbSet **set_pool;
-    
-    char *source_string;
-    size_t source_string_size;
-    char *concept_graphs;
-    
-    char *concept_index;
-
-    /***** temp area for test ******/
-    
-
-
-
-} glbRequest;
-
-typedef struct glbSearchRequest
-{
-    struct glbSet **set_pool;
-
-    char *source_string;
-    size_t source_string_size;
-    char *concept_graph;
-    
-    char *concept_index;
-
-    size_t result_size;
-
-} glbSearchRequest;
-
 typedef struct glbColl
 {
     char *name;
@@ -46,6 +15,7 @@ typedef struct glbColl
 
     /* concept index */
     struct glbMaze *maze;
+
 
     /* set index (name: set) */
     struct ooDict *set_index;
@@ -61,9 +31,15 @@ typedef struct glbColl
 	       const char *spec,
 	       const char *obj);
 
+    int (*get)(struct glbColl *self,
+	       const char *spec);
+
     int (*find)(struct glbColl *self,
 		const char *spec,
 		const char *request);
+
+    int (*remove)(struct glbColl *self,
+		  const char *spec);
 
 
 

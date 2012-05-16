@@ -2,25 +2,24 @@
  *   Copyright (c) 2011-2012 by Dmitri Dmitriev
  *   All rights reserved.
  *
- *   This file is part of the OOmnik Conceptual Processor, 
+ *   This file is part of the Globbie Search Engine, 
  *   and as such it is subject to the license stated
  *   in the LICENSE file which you have received 
  *   as part of this distribution.
  *
  *   Project homepage:
- *   <http://www.oomnik.ru>
+ *   <http://www.globbie.net>
  *
  *   Initial author and maintainer:
  *         Dmitri Dmitriev aka M0nsteR <dmitri@globbie.net>
  *
- *   --------
- *   oomaze.h
- *   OOmnik Maze Dictionary
+ *   ----------
+ *   glb_maze.h
+ *   Globbie Maze Dictionary
  */
+
 #ifndef GLB_MAZE_H
 #define GLB_MAZE_H
-
-#include "ooconfig.h"
 
 struct glbMazeRef
 {
