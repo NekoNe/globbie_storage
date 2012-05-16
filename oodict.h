@@ -38,9 +38,12 @@ typedef struct ooDictItem
 
 typedef struct ooDict
 {
-    /******** public attributes ********/
+    size_t size;
+
+    /******** public methods ********/
     int (*init)(struct ooDict *self);
     int (*del)(struct ooDict *self);
+    const char* (*str)(struct ooDict *self);
 
     /* get data */
     void* (*get)(struct ooDict *self,
@@ -65,11 +68,18 @@ typedef struct ooDict
 		  unsigned int new_size);
 
     /* set hash function */
-    oo_hash_func (*set_hash)(struct ooDict *self,
-			     oo_hash_func new_hash);
+    int (*set_hash)(struct ooDict *self,
+		    oo_hash_func new_hash);
 
-    oo_compar_func (*set_compare)(struct ooDict *self,
-                                  oo_compar_func new_compar_func);
+    /* listing the keys and values */
+    int (*rewind)(struct ooDict *self);
+    int (*next_item)(struct ooDict *self,
+		     const char **key,
+		     void **data);
+
+    /*int (*set_compare)(struct ooDict *self,
+      oo_compar_func new_compar_func);
+    */
 
     /******** private attributes ********/
 
@@ -77,9 +87,12 @@ typedef struct ooDict
 
     oo_hash_func hash_func;
 
+    size_t curr_pos;
+    struct ooListItem *curr_item;
+
 } ooDict;
 
 /* constructor */
-extern int ooDict_new(struct ooDict **self);
+extern int ooDict_new(struct ooDict **self, size_t init_size);
 
 #endif /* OODICT_H */
