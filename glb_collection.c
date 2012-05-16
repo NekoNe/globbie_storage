@@ -1,22 +1,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
 
-#include "glb_collection.h"
+#include "oodict.h"
+#include "glb_maze.h"
 #include "glb_set.h"
 #include "glb_index_tree.h"
 #include "glb_set_file.h"
 #include "glb_request_handler.h"
 #include "glb_config.h"
 #include "glb_interpreter.h"
-
-#include "oodict.h"
-#include "fcntl.h"
+#include "glb_collection.h"
 
 #define SET_COUNT 10
 
+/* declarations */
 static int
-glbCollection_tconcept_to_sets(struct glbCollection *self, char *bytecode, struct glbSet **set_pool)
+glbColl_findSet(struct glbColl *self, char *name, struct glbSet **set);
+
+static int
+glbColl_tconcept_to_sets(struct glbColl *self, char *bytecode, struct glbSet **set_pool)
 {
     /* II. adding cur_id and locsets to sets */
     /* выделили сет с локсетом и сразу в Адъ*/
@@ -25,14 +29,15 @@ glbCollection_tconcept_to_sets(struct glbCollection *self, char *bytecode, struc
 }
 
 static int
-glbCollection_newDocument(struct glbCollection *self, struct glbAddRequest *request)
+glbColl_add(struct glbColl *self, 
+		  struct glbAddRequest *request)
 {
     int fd;
     size_t res;
 
     /*  I. transforming terminal concepts to set addresses*/
     
-    self->tconcept_to_sets(self, request->concept_index, request->set_pool);
+    glbColl_tconcept_to_sets(self, request->concept_index, request->set_pool);
 
     /* III. saving doc */
 
@@ -53,12 +58,12 @@ glbCollection_newDocument(struct glbCollection *self, struct glbAddRequest *requ
 }
 
 static int
-glbCollection_addDocToSet(struct glbCollection *self, char *name)
+glbColl_addDocToSet(struct glbColl *self, char *name)
 {
     struct glbSet *set;
 
     set = NULL;
-    self->findSet(self, name, &set);
+    glbColl_findSet(self, name, &set);
     
     if (!set) return glb_OK;
     
@@ -69,14 +74,15 @@ glbCollection_addDocToSet(struct glbCollection *self, char *name)
 }
 
 static int
-glbCollection_findDocuments(struct glbCollection *self, 
-			    struct glbSearchRequest *request)
+glbColl_find(struct glbColl *self, 
+	     struct glbSearchRequest *request)
 {
     int res;
     struct glbRequestHandler *request_handler;
+
     /*   I. transforming terminal concepts to set addresses */
 
-    self->tconcept_transform(self, request->concept_index, request->set_pool);
+    /* glbColl_tconcept_transform(self, request->concept_index, request->set_pool); */
 
     /*TODO: sort sets in setpool*/
     
@@ -100,7 +106,7 @@ intersection:
 }
 
 static int
-glbCollection_newSet(struct glbCollection *self, char *name, struct glbSet **answer)
+glbColl_newSet(struct glbColl *self, char *name, struct glbSet **answer)
 {
     int result;
 
@@ -114,7 +120,7 @@ glbCollection_newSet(struct glbCollection *self, char *name, struct glbSet **ans
     result = glbSet_new(&set, name, "");
     if (result) return glb_NOMEM;
    
-    if (self->dict->set(self->dict, name, set)) {
+    if (self->set_index->set(self->set_index, name, set)) {
         set->del(set);
         return glb_NOMEM;
     }
@@ -124,36 +130,37 @@ glbCollection_newSet(struct glbCollection *self, char *name, struct glbSet **ans
 }
 
 static int
-glbCollection_findSet(struct glbCollection *self, char *name, struct glbSet **set)
+glbColl_findSet(struct glbColl *self, char *name, struct glbSet **set)
 {
 
-    *set = self->dict->get(self->dict, name);
+    *set = self->set_index->get(self->set_index, name);
     return glb_OK;
 }
 
 static int
-glbCollection_print(struct glbCollection *self)
+glbColl_str(struct glbColl *self)
 {
-    printf("<struct glbCollection at %p>\n", self);
+    printf("<struct glbColl at %p>\n", self);
+
     return glb_OK;
 }
 
 static int
-glbCollection_addDoc(void *control, struct glbStack *stack, size_t argc, char **argv)
+glbColl_addDoc(void *control, struct glbStack *stack, size_t argc, char **argv)
 {
     size_t i, len, begin;
-    struct glbCollection *self;
+    struct glbColl *self;
     struct glbSet *set;
     char name[GLB_NAME_LENGTH];
 
     set = NULL;
-    self = (struct glbCollection *)control;
+    self = (struct glbColl *)control;
     printf("in add doc\n"); 
     
     /* parse first arg */
     len = strlen(argv[0]);
     
-    printf("in addDoc pasrsing [%s], len %d\n", argv[0], len);
+    printf("in addDoc parsing [%s], len %d\n", argv[0], len);
     
     begin = 0;
     i = 0;
@@ -169,10 +176,11 @@ glbCollection_addDoc(void *control, struct glbStack *stack, size_t argc, char **
     
         /* finding concept */
         set = NULL;
-        self->findSet(self, name, &set);     
+        glbColl_findSet(self, name, &set);     
         
         if (!set)    
-            self->newSet(self, name, &set);
+            glbColl_newSet(self, name, &set);
+
         self->cur_id = self->id_pool[self->id_count];
         
         set->add(set, self->cur_id, "", 1 );
@@ -183,19 +191,19 @@ glbCollection_addDoc(void *control, struct glbStack *stack, size_t argc, char **
 }
 
 static int
-glbCollection_findDocs(void *control, struct glbStack *stack, size_t argc, char **argv)
+glbColl_findDocs(void *control, struct glbStack *stack, size_t argc, char **argv)
 {
     struct glbSet **set_pool;
     struct glbSet *set;
     char name[GLB_NAME_LENGTH];
     size_t i, begin, count, len;
     struct glbRequestHandler *request;
-    struct glbCollection *self;
+    struct glbColl *self;
     
     size_t answer_size;
 
     set = NULL;
-    self = (struct glbCollection *)control;
+    self = (struct glbColl *)control;
     
     /* parse first arg */
     len = strlen(argv[0]);
@@ -216,7 +224,7 @@ glbCollection_findDocs(void *control, struct glbStack *stack, size_t argc, char 
         /* finding concept */
         
         set = NULL;
-        self->findSet(self, name, &set);     
+        glbColl_findSet(self, name, &set);     
         
         if (!set) {
             printf("no such concept\n");
@@ -248,8 +256,8 @@ glbCollection_findDocs(void *control, struct glbStack *stack, size_t argc, char 
     
 }
 
-const char* glbCollection_process(struct glbCollection *self, 
-				  const char *msg)
+const char* glbColl_process(struct glbColl *self, 
+			    const char *msg)
 {
     struct glbInterpreter *interpreter;
     struct glbFunction addDoc, findDocs;
@@ -262,10 +270,10 @@ const char* glbCollection_process(struct glbCollection *self,
     interpreter->control = (void *)self;
 
     addDoc.arg_count = 1;
-    addDoc.func = glbCollection_addDoc;
+    addDoc.func = glbColl_addDoc;
 
     findDocs.arg_count = 2;
-    findDocs.func = glbCollection_findDocs;
+    findDocs.func = glbColl_findDocs;
 
     interpreter->functions->set(interpreter->functions, "addDoc", &addDoc);
     interpreter->functions->set(interpreter->functions, "findDocs", &findDocs);
@@ -278,14 +286,15 @@ const char* glbCollection_process(struct glbCollection *self,
 
 
 static int
-glbCollection_del(struct glbCollection *self)
+glbColl_del(struct glbColl *self)
 {
     if (GLB_COLLECTION_DEBUG_LEVEL_1)
-        printf("deleting struct glbCollection at %p...\n", self);
+        printf("deleting struct glbColl at %p...\n", self);
 
     if (!self) return glb_OK;
     
-    if (self->dict) self->dict->del(self->dict);
+    if (self->maze) self->maze->del(self->maze);
+    if (self->set_index) self->set_index->del(self->set_index);
     if (self->storage) self->storage->del(self->storage);
 
     free(self);
@@ -293,27 +302,25 @@ glbCollection_del(struct glbCollection *self)
 }
 
 static int
-glbCollection_init(struct glbCollection *self)
+glbColl_init(struct glbColl *self)
 {
     size_t count; /* max num of docs */
     size_t i;
 
-    self->print = glbCollection_print;
-    self->del = glbCollection_del;
-    self->findSet = glbCollection_findSet; 
-    self->newSet = glbCollection_newSet;
-    self->newDocument = glbCollection_newDocument;
-    self->findDocuments = glbCollection_findDocuments;
-    self->addDocToSet = glbCollection_addDocToSet;
+    self->str = glbColl_str;
+    self->del = glbColl_del;
 
+    /*self->add = glbColl_add;
+      self->find = glbColl_find;*/
+
+    /* first id */
     self->id_pool[0][0] = '0'; 
     self->id_pool[0][1] = '0'; 
     self->id_pool[0][2] = '0'; 
     self->id_count = 0;
-    /* filling id_pool */
 
+    /* generate all ids */
     count = GLB_RADIX_BASE * GLB_RADIX_BASE * GLB_RADIX_BASE;
-    
     for (i = 1; i < count; i++) {
        memcpy(self->id_pool[i], self->id_pool[i - 1], GLB_ID_MATRIX_DEPTH);
        inc_id(self->id_pool[i]);
@@ -324,16 +331,16 @@ glbCollection_init(struct glbCollection *self)
     return glb_OK;
 }
 
-int glbCollection_new(struct glbCollection **rec)
+int glbColl_new(struct glbColl **rec)
 {
-    struct glbCollection *self;
+    struct glbColl *self;
     struct ooDict *dict, *storage;
     int result;
     size_t i, count; /* max num of docs */
     
-    self = malloc(sizeof(struct glbCollection));
+    self = malloc(sizeof(struct glbColl));
     if (!self) return glb_NOMEM;
-    
+
 /*	self->cur_id = malloc(GLB_ID_MATRIX_DEPTH * sizeof(char));
 	if (!self->cur_id) return glb_NOMEM;
 */
@@ -341,33 +348,31 @@ int glbCollection_new(struct glbCollection **rec)
     
     self->id_pool = malloc(count * sizeof(char *));
 	if (!self->id_pool) {
-        glbCollection_del(self);
+        glbColl_del(self);
         return glb_NOMEM;
     }
   
     for (i = 0; i < count; i++) {
         self->id_pool[i] = malloc(GLB_ID_MATRIX_DEPTH * sizeof(char));
         if (!self->id_pool[i]) {
-            glbCollection_del(self);
+            glbColl_del(self);
             return glb_NOMEM;
         }
     }
 
-    result = ooDict_new(&dict);
+    result = ooDict_new(&self->set_index, GLB_LARGE_DICT_SIZE);
     if (result) {
-        glbCollection_del(self);
+        glbColl_del(self);
         return glb_FAIL;
     }
-    self->dict = dict;
-    
-    result = ooDict_new(&storage);
+ 
+    result = ooDict_new(&self->storage, GLB_LARGE_DICT_SIZE);
     if (result) {
-        glbCollection_del(self);
+        glbColl_del(self);
         return glb_FAIL;
     }
-    self->storage = storage;
 
-    glbCollection_init(self); 
+    glbColl_init(self); 
     *rec = self;
     return glb_OK;
 }
