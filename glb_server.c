@@ -15,46 +15,55 @@
 struct worker_args {
     int worker_id;
 
-    struct glbCollection *collection;
+    struct glbColl *collection;
     void *zmq_context;
 };
 
 void *worker_routine(void *arg)
 {
     struct worker_args *args;
-    struct glbCollection *collection;
+    struct glbColl *collection;
     void *client;
     void *outbox;
-    char *msg;
+    char *header, *obj, *interp;
     const char *result;
     int ret;
 
     args = (struct worker_args*)arg;
     collection = args->collection;
 
-    client = zmq_socket(args->zmq_context, ZMQ_REP);
+    client = zmq_socket(args->zmq_context, ZMQ_PULL);
     if (!client) pthread_exit(NULL);
-    ret = zmq_connect(client, "tcp://127.0.0.1:6909");
+    ret = zmq_connect(client, "tcp://127.0.0.1:6902");
 
     while (1) {
-        msg = s_recv(client);
-        printf("Worker #%d: processing message \"%s\"...\n", 
-                args->worker_id, msg);
 
-        result = glbCollection_process((void*)collection,
-                       (const char*)msg);
+        header = s_recv(client);
+
+        printf("  Collection Input Manager #%d: got header \"%s\"...\n", 
+                args->worker_id, header);
+
+	obj = s_recv(client);
+	interp = s_recv(client);
+
+
+        printf("  Collection Input Manager #%d: orig: \"%s\"\n  interp: \"%s\"...\n", 
+	       args->worker_id, obj, interp);
+
+	result = glbColl_process((void*)collection,
+				 (const char*)interp);
 
         printf("RESULT: %s\n", result);
 
-        s_send(client, result);
+	/*s_send(client, result);*/
+	free(header);
+        free(obj);
+        free(interp);
 
         fflush(stdout);
-        free(msg);
-        //glbCollection_free_result(result);
     }
     zmq_close(client);
 
-    /*zmq_close(outbox);*/
 }
 
 
@@ -66,7 +75,7 @@ main(int           const argc,
     void *frontend;
     void *backend;
 
-    struct glbCollection *collection;
+    struct glbColl *collection;
     //const char *config_filename;
     void *receiver;
     void *sender;
@@ -82,9 +91,9 @@ main(int           const argc,
     //}
     //config_filename = argv[1];
         
-    ret = glbCollection_new(&collection);
+    ret = glbColl_new(&collection);
     if (ret) {
-        fprintf(stderr, "Couldn\'t load glbCollection... ");
+        fprintf(stderr, "Couldn\'t load glbColl... ");
         return -1;
     }
     
@@ -92,10 +101,10 @@ main(int           const argc,
     /*  one I/O thread in the thread pool will do. */
     context = zmq_init(1);
 
-    frontend = zmq_socket(context, ZMQ_ROUTER);
-    backend = zmq_socket(context, ZMQ_DEALER);
-    zmq_bind(frontend, "tcp://127.0.0.1:6908");
-    zmq_bind(backend, "tcp://127.0.0.1:6909");
+    frontend = zmq_socket(context, ZMQ_PULL);
+    backend = zmq_socket(context, ZMQ_PUSH);
+    zmq_bind(frontend, "tcp://127.0.0.1:6901");
+    zmq_bind(backend, "tcp://127.0.0.1:6902");
 
     /* pool of threads */
     for (i = 0; i < NUM_WORKERS; i++) {
@@ -107,6 +116,8 @@ main(int           const argc,
  
         ret = pthread_create(&worker, NULL, worker_routine, (void*)&w_args[i]);
     }
+
+    printf("  ++ Globbie server is up and running!...\n\n");
 
     zmq_device(ZMQ_QUEUE, frontend, backend);
 
