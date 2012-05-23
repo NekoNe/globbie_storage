@@ -1,28 +1,22 @@
-#include <stdio.h>
-#include <stdlib.h>
+#ifndef GLB_COLL_H
+#define GLB_COLL_H
 
-#include "glb_config.h"
+struct glbCollRef
+{
+    char *name;
+    char *service_address;
 
-typedef struct glbColl
+    struct glbCollRef *next;
+};
+
+
+struct glbColl
 {
     char *name;
     char *env_path;
 
-    char *cur_id; /* next obj id */
-    char *key_id;
-    char **id_pool;
-    size_t id_count;
+    struct glbCollRef *children;
 
-    /* concept index */
-    struct glbMaze *maze;
-
-
-    /* set index (name: set) */
-    struct ooDict *set_index;
-    
-    /* (ID : URL) dictionary */
-    struct ooDict *storage;
-    
     /**********  interface methods  **********/
     int (*del)(struct glbColl *self);
     int (*str)(struct glbColl *self);
@@ -41,9 +35,15 @@ typedef struct glbColl
     int (*remove)(struct glbColl *self,
 		  const char *spec);
 
+    int (*start)(struct glbColl *self);
+
+    int (*find_route)(struct glbColl *self,
+		      const char *spec,
+		      const char **dest_coll_addr);
 
 
-} glbColl;
+};
 
-extern const char* glbColl_process(struct glbColl *self, const char *msg); 
-extern int glbColl_new(struct glbColl **self);
+extern int glbColl_new(struct glbColl **self,
+		       const char *config);
+#endif
