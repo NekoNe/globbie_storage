@@ -413,6 +413,34 @@ glbMaze_sort_items(struct glbMaze *self)
 
 
 static int 
+glbMaze_read_XML(struct glbMaze *self, 
+		 const char *input,
+		 size_t input_size)
+{
+
+    xmlDocPtr doc;
+
+    /*
+     * The document being in memory, it have no base per RFC 2396,
+     * and the "noname.xml" argument will serve as its base.
+     */
+    doc = xmlReadMemory(input, input_size, "noname.xml", NULL, 0);
+
+    if (!doc) {
+        fprintf(stderr, "Failed to parse document\n");
+	return glb_FAIL;
+    }
+
+
+
+
+
+    xmlFreeDoc(doc);
+
+    return glb_OK;
+}
+
+static int 
 glbMaze_init(struct glbMaze *self)
 {
     self->del           = glbMaze_del;
@@ -423,6 +451,7 @@ glbMaze_init(struct glbMaze *self)
     self->alloc_loc    = glbMaze_alloc_loc;
     self->add           = glbMaze_add;
     self->sort           = glbMaze_sort_items;
+    self->read           = glbMaze_read_XML;
 
     return glb_OK;
 }

@@ -103,8 +103,9 @@ struct glbMaze
 
     int (*sort)(struct glbMaze *self);
 
-    int (*present)(struct glbMaze *self,
-		   output_type format);
+    int (*read)(struct glbMaze *self,
+		const char *input,
+		size_t input_size);
 
     struct glbMazeItem* (*alloc_item)(struct glbMaze *self);
     struct glbMazeSpec* (*alloc_spec)(struct glbMaze *self);
