@@ -71,7 +71,8 @@
 //  Caller must free returned string. Returns NULL if the context
 //  is being terminated.
 static char *
-s_recv (void *socket) {
+s_recv(void *socket, size_t *msg_size) 
+{
     zmq_msg_t message;
     zmq_msg_init (&message);
     if (zmq_recv (socket, &message, 0))
@@ -81,16 +82,19 @@ s_recv (void *socket) {
     memcpy (string, zmq_msg_data (&message), size);
     zmq_msg_close (&message);
     string [size] = 0;
+    *msg_size = size;
+
     return (string);
 }
 
 //  Convert C string to 0MQ string and send to socket
 static int
-s_send (void *socket, const char *string) {
+s_send(void *socket, const char *string, size_t string_size) 
+{
     int rc;
     zmq_msg_t message;
-    zmq_msg_init_size (&message, strlen (string));
-    memcpy (zmq_msg_data (&message), string, strlen (string));
+    zmq_msg_init_size (&message, string_size);
+    memcpy (zmq_msg_data (&message), string, string_size);
     rc = zmq_send (socket, &message, 0);
     zmq_msg_close (&message);
     return (rc);
@@ -98,11 +102,11 @@ s_send (void *socket, const char *string) {
 
 //  Sends string as 0MQ string, as multipart non-terminal
 static int
-s_sendmore (void *socket, const char *string) {
+s_sendmore (void *socket, const char *string, size_t string_size) {
     int rc;
     zmq_msg_t message;
-    zmq_msg_init_size (&message, strlen (string));
-    memcpy (zmq_msg_data (&message), string, strlen (string));
+    zmq_msg_init_size (&message, string_size);
+    memcpy (zmq_msg_data (&message), string, string_size);
     rc = zmq_send (socket, &message, ZMQ_SNDMORE);
     zmq_msg_close (&message);
     return (rc);

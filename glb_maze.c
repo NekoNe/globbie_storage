@@ -23,8 +23,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <libxml/parser.h>
+
 #include "glb_config.h"
 #include "glb_maze.h"
+#include "glb_set.h"
 #include "oodict.h"
 
 static int 
@@ -44,6 +47,44 @@ glbMaze_item_cmp(const void *a,
     if ((*item1)->num_locs > (*item2)->num_locs) return 1;
     return -1;
 }
+
+
+static int
+glbMaze_newSet(struct glbMaze *self, char *name, struct glbSet **answer)
+{
+    int result;
+
+    struct glbSet *set;
+    struct glbSetFile *file;
+    struct glbIndexTree *index;
+
+    if (GLB_COLLECTION_DEBUG_LEVEL_2)
+        printf("adding new struct glbSet [%s]\n", name);
+    
+    result = glbSet_new(&set, name, "");
+    if (result) return glb_NOMEM;
+   
+/*
+    if (self->set_index->set(self->set_index, name, set)) {
+        set->del(set);
+        return glb_NOMEM;
+    }
+*/
+
+
+    *answer = set;
+    return glb_OK;
+}
+
+static int
+glbMaze_findSet(struct glbMaze *self, char *name, struct glbSet **set)
+{
+
+    /* *set = self->set_index->get(self->set_index, name); */
+
+    return glb_OK;
+}
+
 
 
 static int
@@ -290,45 +331,41 @@ glbMaze_add_spec(struct glbMaze *self,
 
 	}*/
 
-
     return glb_OK;
 }
 
 static int 
 glbMaze_add(struct glbMaze *self,
-	   struct glbMazeSpec *topic_spec,
-	   struct glbMazeItem *complex,
-	   size_t depth)
+	    struct glbMazeSpec *topic_spec,
+	    xmlNodePtr input_node)
 {
     struct glbMazeItem *item;
     struct glbMazeSpec *spec;
     struct glbMazeLoc *loc;
 
     size_t global_offset;
-    const char *name;
+    char *name;
+    char *value;
     size_t name_size;
     int ret;
 
-    /*name =  (const char*)complex->usage->name;
-    name_size = complex->usage->name_size;
+    name = (char *)xmlGetProp(input_node,  (const xmlChar *)"n");
+    if (!name) return glb_FAIL;
 
-    global_offset = complex->solver->decoder->global_offset;
-    */
-
-    printf("  add conc %s at maze depth %d..\n", name, depth);
+    printf(" add conc: %s\n", name);
 
     /* link yourself back to the topic */
-    if (topic_spec) {
+    /*if (topic_spec) {
 	ret = glbMaze_add_spec(self, topic_spec, complex);
 	if (ret != glb_OK) return ret;
-    }
+	}*/
 
     /* registration of a new root item */
     item = self->item_dict->get(self->item_dict, name);
     if (!item) {
 	item = self->alloc_item(self);
 	if (!item) return glb_NOMEM;
-	item->name = name;
+	item->name = strdup(name);
 	item->name_size = name_size;
 	ret = self->item_dict->set(self->item_dict,
 				   name, item);
@@ -338,59 +375,13 @@ glbMaze_add(struct glbMaze *self,
 
 	printf("  ++ root registration of item %s [%p]\n", 
 	       item->name, item);
-
     }
+    xmlFree(name);
 
 
-    /* explore the topic branch */
-    /*if (complex->topic)
-      glbMaze_add(self, topic_spec, complex->topic, depth + 1);*/
-	
+    printf("MAZE %d ITEM: %s\n", self->id, item->name);
 
-    /* no specs present:
-     * it's time to add a loc */
-    /*if (!complex->spec.complex) {
-	loc = self->alloc_loc(self);
-	if (!loc) return glb_NOMEM;
-	loc->linear_begin = global_offset + complex->linear_begin;
-	loc->linear_end = global_offset + complex->linear_end;
-
-	item->num_locs++;
-	loc->next = item->locs;
-	item->locs = loc;
-	return glb_OK;
-    }
-    */
-    
-    /* add specs */
-
-    /*    spec = NULL;
-    if (item->specs)
-	spec = glbMaze_find_spec(item->specs, complex->spec.name);
-
-    if (!spec) {
-	spec = self->alloc_spec(self);
-	if (!spec) return glb_NOMEM;
-	spec->name = complex->spec.name;
-	spec->next = item->specs;
-	item->specs = spec;
-    }
-
-
-    if ((depth + 1) > GLB_MAZE_MAX_DEPTH) return glb_OK; 
-
-
-    glbMaze_add(self, spec, complex->spec.complex, depth + 1);
-    */
-
-
-
-    /* add peers */
-
-
-
-    /* add yourself as a subclass to other items */
-
+    /* add locset */
 
 
     return glb_OK;
@@ -415,29 +406,54 @@ glbMaze_sort_items(struct glbMaze *self)
 static int 
 glbMaze_read_XML(struct glbMaze *self, 
 		 const char *input,
-		 size_t input_size)
+		 size_t input_size,
+		 const char *obj_id)
 {
-
     xmlDocPtr doc;
+    xmlNodePtr root, cur_node;
+    char *value;
+    int ret = glb_OK;
 
-    /*
-     * The document being in memory, it have no base per RFC 2396,
-     * and the "noname.xml" argument will serve as its base.
-     */
-    doc = xmlReadMemory(input, input_size, "noname.xml", NULL, 0);
+    printf(" Maze %d is parsing XML: %s\n [size: %d, obj_id: %s]\n", 
+	   self->id, input, input_size, obj_id);
 
+    doc = xmlReadMemory(input, input_size, "none.xml", NULL, 0);
     if (!doc) {
         fprintf(stderr, "Failed to parse document\n");
 	return glb_FAIL;
     }
 
+    printf(" Maze %d: XML parse OK!\n", self->id);
 
+    root = xmlDocGetRootElement(doc);
+    if (!root) {
+	fprintf(stderr,"empty document\n");
+	ret = glb_FAIL;
+	goto error;
+    }
 
+    if (xmlStrcmp(root->name, (const xmlChar *) "maze")) {
+	fprintf(stderr,"Document of the wrong type: the root node " 
+		" must be \"maze\"");
+	ret = glb_FAIL;
+	goto error;
+    }
 
+    for (cur_node = root->children; cur_node; cur_node = cur_node->next) {
+        if (cur_node->type != XML_ELEMENT_NODE) continue;
+
+	if ((!xmlStrcmp(cur_node->name, (const xmlChar *)"conc"))) {
+	    ret = glbMaze_add(self, NULL, cur_node);
+	    if (ret == glb_NOMEM) goto error;
+
+	}
+    }
+
+ error:
 
     xmlFreeDoc(doc);
 
-    return glb_OK;
+    return ret;
 }
 
 static int 
@@ -448,10 +464,10 @@ glbMaze_init(struct glbMaze *self)
     self->str           = glbMaze_str;
     self->alloc_item    = glbMaze_alloc_item;
     self->alloc_spec    = glbMaze_alloc_spec;
-    self->alloc_loc    = glbMaze_alloc_loc;
+    self->alloc_loc     = glbMaze_alloc_loc;
     self->add           = glbMaze_add;
-    self->sort           = glbMaze_sort_items;
-    self->read           = glbMaze_read_XML;
+    self->sort          = glbMaze_sort_items;
+    self->read          = glbMaze_read_XML;
 
     return glb_OK;
 }
@@ -468,8 +484,6 @@ glbMaze_new(struct glbMaze **maze)
     memset(self, 0, sizeof(struct glbMaze));
 
     self->del = glbMaze_del;
-
-    printf("new maze\n");
 
     /* allocate items */
     self->item_storage = malloc(sizeof(struct glbMazeItem) *\

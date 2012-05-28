@@ -28,6 +28,11 @@ void *worker_routine(void *arg)
     char *spec, *obj, *interp;
     const char *dest_coll_addr = NULL;
     const char *result;
+
+    size_t spec_size = 0;
+    size_t obj_size = 0;
+    size_t interp_size = 0;
+
     int ret;
 
     char buf[1024];
@@ -51,14 +56,19 @@ void *worker_routine(void *arg)
 
     while (1) {
 
-        spec = s_recv(client);
-	obj = s_recv(client);
-	interp = s_recv(client);
+	spec_size = 0;
+	obj_size = 0;
+	interp_size = 0;
+
+        spec = s_recv(client, &spec_size);
+	obj = s_recv(client, &obj_size);
+	interp = s_recv(client, &interp_size);
 
         printf("  Coll Reception #%d: got spec \"%s\"...\n", 
                 args->worker_id, spec);
         printf("  Coll Reception #%d: orig: \"%s\"\n  interp: \"%s\"...\n", 
 	       args->worker_id, obj, interp);
+
 
 	/*result = glbColl_process((void*)collection,
 	  (const char*)interp);*/
@@ -66,10 +76,9 @@ void *worker_routine(void *arg)
 
 	/* stay in this collection */
 	if (!dest_coll_addr) {
-
-	    s_sendmore(publisher, spec);
-	    s_sendmore(publisher, obj);
-	    s_send(publisher, interp);
+	    s_sendmore(publisher, spec, spec_size);
+	    s_sendmore(publisher, obj, obj_size);
+	    s_send(publisher, interp, interp_size);
 	}
 
 	free(spec);

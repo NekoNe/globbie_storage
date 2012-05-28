@@ -1,6 +1,14 @@
 #ifndef GLB_STORAGE_H
 #define GLB_STORAGE_H
 
+#define GLB_NUM_AGENTS 4
+
+struct agent_args {
+    int agent_id;
+    struct glbStorage *storage;
+};
+
+
 struct glbStorage
 {
     char *name;
@@ -9,18 +17,20 @@ struct glbStorage
 
     char *cur_id; /* next obj id */
     char *key_id;
+
     char **id_pool;
     size_t id_count;
 
-    /* concept index */
-    struct glbMaze *maze;
+    void *context;
 
-    /* set index (name: set) */
-    struct ooDict *set_index;
-    
-    /* (ID : URL) dictionary */
-    struct ooDict *storage;
-    
+    size_t num_agents;
+
+    /* storage partitions */
+    struct glbPartition **partitions;
+
+    /* concept indices for each agent/thread */
+    struct glbMaze **mazes;
+
     /**********  interface methods  **********/
     int (*del)(struct glbStorage *self);
     int (*str)(struct glbStorage *self);
