@@ -21,6 +21,8 @@
 #ifndef GLB_MAZE_H
 #define GLB_MAZE_H
 
+#include <libxml/parser.h>
+
 struct glbMazeRef
 {
     struct glbMazeItem *item;
@@ -73,7 +75,7 @@ struct glbMazeItem
 
 struct glbMaze
 {
-    struct ooAccu *accu;
+    int id;
 
     struct glbMazeItem *item_storage;
     struct glbMazeItem **item_index;
@@ -98,13 +100,14 @@ struct glbMaze
 
     int (*add)(struct glbMaze *self,
 	       struct glbMazeSpec *topic,
-	       struct glbMazeItem *item,
-	       size_t depth);
+	       xmlNodePtr input_node);
 
     int (*sort)(struct glbMaze *self);
 
-    int (*present)(struct glbMaze *self,
-		   output_type format);
+    int (*read)(struct glbMaze *self,
+		const char *input,
+		size_t input_size,
+		const char *obj_id);
 
     struct glbMazeItem* (*alloc_item)(struct glbMaze *self);
     struct glbMazeSpec* (*alloc_spec)(struct glbMaze *self);

@@ -115,4 +115,6 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 #define GLB_MAZE_LOC_STORAGE_SIZE 1024 * 1024
 #define GLB_MAZE_MAX_DEPTH 3
 
+#define GLB_TEMP_BUF_SIZE 256
+
 #endif

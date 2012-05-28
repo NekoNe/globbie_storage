@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <string.h>
 
@@ -14,6 +15,7 @@
 int compare(const char *a, const char *b)
 {
     int i;
+
     for (i = 0; i < GLB_ID_MATRIX_DEPTH; i++) {
         if (a[i] > b[i]) return glb_MORE;
         else if (a[i] < b[i]) return glb_LESS;
@@ -99,4 +101,23 @@ int glb_mkpath(const char *path, mode_t mode)
     free(path_buf);
 
     return ret;
+}
+
+int glb_write_file(const char *path, const char *filename, 
+		   void *buf, size_t buf_size)
+{
+    char name_buf[GLB_TEMP_BUF_SIZE];
+    int fd;
+
+    sprintf(name_buf, "%s/%s", path, filename);
+
+    /* write textual content */
+    fd = open((const char*)name_buf,  
+	      O_WRONLY | O_TRUNC | O_CREAT, 0644);
+    if (fd < 0) return glb_IO_FAIL;
+
+    write(fd, buf, buf_size);
+    close(fd);
+
+    return glb_OK;
 }
