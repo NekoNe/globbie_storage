@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <string.h>
 
+
 #include <errno.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -120,4 +121,103 @@ int glb_write_file(const char *path, const char *filename,
     close(fd);
 
     return glb_OK;
+}
+
+
+/**
+ * read XML attr value, allocate memory and copy 
+ */
+extern int
+glb_copy_xmlattr(xmlNode    *input_node,
+		const char *attr_name,
+		char       **result,
+		size_t     *result_size)
+{
+     char *value;
+     char *val_copy;
+     int ret;
+
+     value = (char*)xmlGetProp(input_node,  (const xmlChar *)attr_name);
+     if (!value) return glb_FAIL;
+     
+     /* overwrite the previous value if any */
+     if ((*result))
+	 free((*result));
+
+     (*result_size) = strlen(value);
+     val_copy = malloc((*result_size) + 1);
+     if (!val_copy) {
+	 xmlFree(value);
+	 return glb_NOMEM;
+     }
+
+     strcpy(val_copy, value);
+     xmlFree(value);
+
+     /*printf("VALUE: %s\n\n", val_copy);*/
+
+     (*result) = val_copy;
+
+     return glb_OK;
+}
+
+
+static int
+glbData_del(struct glbData *self)
+{
+    if (!self) return glb_OK;
+    free(self);
+    return glb_OK;
+}
+
+
+static int
+glbData_reset(struct glbData *self)
+{
+
+    if (self->id) free(self->id);
+    if (self->local_id) free(self->local_id);
+    if (self->local_path) free(self->local_path);
+
+    if (self->spec) free(self->spec);
+    if (self->obj) free(self->obj);
+
+    if (self->text) free(self->text);
+    if (self->interp) free(self->interp);
+
+    if (self->topics) free(self->topics);
+    if (self->index) free(self->index);
+    if (self->query) free(self->query);
+
+    if (self->reply) free(self->reply);
+
+    if (self->metadata) free(self->metadata);
+
+    if (self->control_msg) free(self->control_msg);
+
+    memset(self, 0, sizeof(struct glbData));
+
+    self->del = glbData_del;
+    self->reset = glbData_reset;
+  
+  return glb_OK;
+}
+
+extern int 
+glbData_new(struct glbData **data)
+{
+    struct glbData *self;
+
+    self = malloc(sizeof(struct glbData));
+    if (!self) return glb_NOMEM;
+
+    memset(self, 0, sizeof(struct glbData));
+
+    self->del = glbData_del;
+    self->reset = glbData_reset;
+
+    *data = self;
+
+    return glb_OK;
+
 }

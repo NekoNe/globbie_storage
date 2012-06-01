@@ -9,6 +9,7 @@
 #include "zhelpers.h"
 
 #include "glb_config.h"
+#include "glb_utils.h"
 #include "glb_storage.h"
 #include "glb_maze.h"
 #include "glb_partition.h"
@@ -20,25 +21,25 @@ void *glbStorage_add_agent(void *arg)
     struct glbStorage *storage;
     struct glbPartition *partition;
     struct glbMaze *maze;
+    struct glbData *data;
 
     void *context;
+
     void *outbox;
+    void *reg;
 
-    char *spec = NULL;
-    void *obj = NULL;
-    char *text = NULL;
-    char *interp = NULL ;
+    char *confirm = NULL;
+    size_t confirm_size = 0;
 
-    size_t spec_size = 0;
-    size_t obj_size = 0;
-    size_t text_size = 0;
-    size_t interp_size = 0;
+    char buf[GLB_TEMP_BUF_SIZE];
 
     const char *obj_id;
     int ret;
 
-    args = (struct agent_args*)arg;
+    ret = glbData_new(&data);
+    if (ret != glb_OK) pthread_exit(NULL);
 
+    args = (struct agent_args*)arg;
     storage = args->storage;
     context = storage->context;
 
@@ -59,65 +60,75 @@ void *glbStorage_add_agent(void *arg)
     if (!outbox) pthread_exit(NULL);
     ret = zmq_connect(outbox, "inproc://outbox");
 
+    reg = zmq_socket(context, ZMQ_REQ);
+    if (!reg) pthread_exit(NULL);
+    zmq_connect(reg, "inproc://register");
+
+
     while (1) {
 
-	spec_size = 0;
-	obj_size = 0;
-	text_size = 0;
-	interp_size = 0;
+	data->reset(data);
 
-	spec = NULL;
-	obj = NULL;
-	text = NULL;
-	interp = NULL;
-
-	printf(" ++ agent %d waiting...\n", 
+	printf("\n    ++ PARTITION AGENT #%d is ready to receive new tasks!\n", 
 	       args->agent_id);
 
-	spec = s_recv(outbox, &spec_size);
+	data->spec = s_recv(outbox, &data->spec_size);
 
-	printf("SPEC: %s\n", spec);
+	buf[0] = '\0';
 
-	if (!strcmp(spec, "ADD")) {
+	if (strstr(data->spec, "ADD")) {
 
-	    text = s_recv(outbox, &text_size);
-	    interp = s_recv(outbox, &interp_size);
+	    data->obj = s_recv(outbox, &data->obj_size);
+	    data->text = s_recv(outbox, &data->text_size);
+	    data->topics = s_recv(outbox, &data->topic_size);
+	    data->index = s_recv(outbox, &data->index_size);
 
-	    printf("agent #%d got ADD spec\n", 
-		   args->agent_id);
+	    printf("    ++ PARTITION AGENT #%d has got spec \"%s\"\n", 
+		   args->agent_id, data->spec);
 
 	    ret = partition->add(partition, 
-				 spec,
-				 spec_size,
-				 obj,
-				 obj_size,
-				 text,
-				 text_size,
-				 &obj_id);
-	    if (ret != glb_OK) goto err;
+				 data);
+	    if (ret != glb_OK) goto final;
 
-	    ret = maze->read(maze, (const char*)interp,
-		       interp_size, obj_id);
+	    /*printf("   new obj added: %s INDEX: %s\n", 
+	      data->local_id, data->index);*/
+
+	    ret = maze->read(maze, 
+			     data);
+	    if (ret != glb_OK) goto final;
+
+	    /* notify register */
+
+	    sprintf(buf, "<spec action=\"add\" "
+                         " obj_id=\"%s\""
+                         " topics=\"%s\"/>\n",
+		    data->id, data->metadata);
+
+	    puts("    Notifying the Storage Registration Service...\n");
+
+	    s_send(reg, buf, strlen(buf));
+	    confirm = s_recv(reg, &confirm_size);
+
+	    printf("    ++  PARTITION AGENT #%d: task complete!\n", 
+		   args->agent_id);
+
+	    /*sleep(1);*/
 	    goto final;
 	}
 
-	if (!strcmp(spec, "FIND")) {
-	    interp = s_recv(outbox, &interp_size);
-	    printf("agent #%d got FIND spec\n", 
-		   args->agent_id);
+	/*if (strstr(spec, "FIND")) {
+	  
+	    goto final;
 
-	}
-
-    err: 
-	if (spec) free(spec);
-	if (text) free(text);
-	if (interp) free(interp);
+	    }*/
 
     final:
+
 	fflush(stdout);
     }
 
     zmq_close(outbox);
+    data->del(data);
 
     return NULL;
 }
@@ -129,15 +140,17 @@ void *glbStorage_add_reception(void *arg)
     void *reception;
     void *agents;
     void *inbox;
-    char *spec, *obj, *interp;
 
-    size_t spec_size = 0;
-    size_t obj_size = 0;
-    size_t interp_size = 0;
+    struct glbStorage *storage;
+    struct glbData *data;
 
     int ret;
 
-    context = arg;
+    storage = (struct glbStorage*)arg;
+    context = storage->context;
+
+    ret = glbData_new(&data);
+    if (ret != glb_OK) pthread_exit(NULL);
 
     reception = zmq_socket(context, ZMQ_SUB);
     if (!reception) pthread_exit(NULL);
@@ -151,56 +164,186 @@ void *glbStorage_add_reception(void *arg)
 
     while (1) {
 
-	spec = NULL;
-	obj = NULL;
-	interp = NULL;
+	data->reset(data);
 
-	spec_size = 0;
-	obj_size = 0;
-	interp_size = 0;
+	printf("\n    ++ STORAGE RECEPTION is waiting for new tasks...\n");
 
-	printf("   Storage is waiting for specs...\n");
+        data->spec = s_recv(reception, &data->spec_size);
 
-        spec = s_recv(reception, &spec_size);
+	if (strstr(data->spec, "ADD")) {
 
-	printf("   Storage got spec: %s\n", spec);
+	    printf("\n    ++ STORAGE RECEPTION has got spec:\n"
+                   "       %s\n", 
+		   data->spec);
 
-	if (!strcmp(spec, "ADD")) {
+	    data->obj = s_recv(reception, &data->obj_size);
+	    data->text = s_recv(reception, &data->text_size);
+	    data->topics = s_recv(reception, &data->topic_size);
+	    data->index = s_recv(reception, &data->index_size);
 
-	    printf("receiving ADD arguments...\n");
 
-	    obj = s_recv(reception, &obj_size);
-	    interp = s_recv(reception, &interp_size);
-
-	    printf("%s %s\n", obj, interp);
+	    printf("\n    ++ STORAGE RECEPTION is sending task to Partitions..\n");
 	    
-	    printf("sending...\n");
+	    s_sendmore(inbox, data->spec, data->spec_size);
+	    s_sendmore(inbox, data->obj, data->obj_size);
+	    s_sendmore(inbox, data->text, data->text_size);
+	    s_sendmore(inbox, data->topics, data->topic_size);
+	    s_send(inbox, data->index, data->index_size);
 
-	    s_sendmore(inbox, spec, spec_size);
-	    s_sendmore(inbox, obj, obj_size);
-	    s_send(inbox, interp, interp_size);
 	    goto final;
 	}
 
-	if (!strcmp(spec, "FIND")) {
+	if (strstr(data->spec, "FIND")) {
 
 	    printf("receiving FIND arguments...\n");
-	    interp = s_recv(reception, &interp_size);
+	    /*interp = s_recv(reception, &data->interp_size);
 
 	    s_sendmore(inbox, spec, spec_size);
-	    s_send(inbox, interp, interp_size);
+	    s_send(inbox, interp, interp_size);*/
+
 	}
 
     final:
-	if (spec) free(spec);
-	if (obj) free(obj);
-	if (interp) free(interp);
 
         fflush(stdout);
     }
 
     /* we never get here */
     zmq_close(reception);
+    zmq_term(context);
+
+    return;
+}
+
+void *glbStorage_add_registration(void *arg)
+{
+    void *context;
+    void *reg;
+    void *control;
+
+    struct glbStorage *storage;
+    struct glbData *data;
+
+    char *reply;
+    size_t reply_size = 0;
+
+    const char *err_msg;
+    size_t err_msg_size = 0;
+
+    char buf[GLB_TEMP_BUF_SIZE];
+
+    int ret;
+
+    ret = glbData_new(&data);
+    if (ret != glb_OK) pthread_exit(NULL);
+
+    storage = (struct glbStorage*)arg;
+    context = storage->context;
+
+    reg = zmq_socket(context, ZMQ_REP);
+    if (!reg) pthread_exit(NULL);
+    zmq_bind(reg, "inproc://register");
+
+    control = zmq_socket(context, ZMQ_PUSH);
+    if (!control) pthread_exit(NULL);
+    ret = zmq_connect(control, "tcp://127.0.0.1:5561");
+
+    while (1) {
+
+	data->reset(data);
+
+	printf("\n    ++ STORAGE REGISTRATION is waiting for new tasks...\n");
+
+        data->spec = s_recv(reg, &data->spec_size);
+
+	printf("    ++ STORAGE REGISTRATION has got spec:\n"
+               "       %s\n", data->spec);
+
+	ret = storage->process(storage, data);
+
+	/* notify controller */
+	if (data->control_msg) {
+	    s_send(control, (const char*)data->control_msg, 
+		   data->control_msg_size);
+	}
+
+	if (data->reply) {
+	    s_send(reg, data->reply, data->reply_size);
+	}
+	else {
+	    err_msg = "{\"error\": \"incorrect call\"}";
+	    err_msg_size = strlen(err_msg);
+	    s_send(reg, err_msg, err_msg_size);
+	}
+
+
+        fflush(stdout);
+    }
+
+    /* we never get here */
+    zmq_close(reg);
+    zmq_term(context);
+
+    return;
+}
+
+
+
+void *glbStorage_add_search_service(void *arg)
+{
+    void *context;
+    void *reg;
+    void *coll;
+
+    struct glbStorage *storage;
+    struct glbData *data;
+
+    int ret;
+
+    storage = (struct glbStorage*)arg;
+    context = storage->context;
+
+    ret = glbData_new(&data);
+    if (ret != glb_OK) pthread_exit(NULL);
+
+
+    reg = zmq_socket(context, ZMQ_REQ);
+    if (!reg) pthread_exit(NULL);
+    zmq_connect(reg, "inproc://register");
+
+    coll = zmq_socket(context, ZMQ_REP);
+    if (!coll) pthread_exit(NULL);
+    zmq_connect(coll, "tcp://127.0.0.1:6903");
+
+    while (1) {
+
+	data->reset(data);
+
+	printf("\n    ++ STORAGE SEARCH SERVICE is waiting for new tasks...\n");
+
+	/* get the query */
+        data->query = s_recv(coll, &data->query_size);
+
+	printf("    ++ STORAGE SEARCH SERVICE has got query:\n"
+               "       %s\n", data->query);
+
+        /* metadata query */
+	/* check the registration */
+        s_send(reg, data->query, data->query_size);
+        data->reply = s_recv(reg, &data->reply_size);
+
+        /* fulltext query */
+
+
+	s_send(coll, data->reply, data->reply_size);
+
+    final:
+
+        fflush(stdout);
+    }
+
+    /* we never get here */
+    zmq_close(reg);
     zmq_term(context);
 
     return;
@@ -217,18 +360,23 @@ main(int           const argc,
     void *context;
     int i, ret;
 
-    pthread_t reception, agent;
+    pthread_t reception;
+    pthread_t registration;
+    pthread_t search_service;
+
+    pthread_t agents[GLB_NUM_AGENTS];
+    pthread_t *agent;
 
     struct agent_args a_args[GLB_NUM_AGENTS];
 
     xmlInitParser();
-
 
     ret = glbStorage_new(&storage, config);
     if (ret) {
         fprintf(stderr, "Couldn\'t load glbStorage... ");
         return -1;
     }
+    storage->name = "LYNX 172.20.41.18";
 
     context = zmq_init(1);
     storage->context = context;
@@ -237,19 +385,31 @@ main(int           const argc,
     ret = pthread_create(&reception,
 			 NULL,
 			 glbStorage_add_reception,
-			 (void*)context);
+			 (void*)storage);
+
+    /* add a registration service */
+    ret = pthread_create(&registration,
+			 NULL,
+			 glbStorage_add_registration,
+			 (void*)storage);
+
+    /* add search service */
+    ret = pthread_create(&search_service,
+			 NULL,
+			 glbStorage_add_search_service,
+			 (void*)storage);
 
     /* add agents */
     for (i = 0; i < GLB_NUM_AGENTS; i++) {
 	a_args[i].agent_id = i; 
  	a_args[i].storage = storage; 
-        ret = pthread_create(&agent, 
+        agent = &agents[i];
+        ret = pthread_create(agent, 
 			     NULL,
 			     glbStorage_add_agent, 
 			     (void*)&a_args[i]);
     }
 
-    /*    printf("storage: %p\n", storage->start);*/
 
     storage->start(storage);
 

@@ -31,27 +31,22 @@ struct glbStorage
     /* concept indices for each agent/thread */
     struct glbMaze **mazes;
 
+    struct ooDict *obj_index;
+
     /**********  interface methods  **********/
     int (*del)(struct glbStorage *self);
     int (*str)(struct glbStorage *self);
 
-    int (*update)(struct glbStorage *self);
-   
-    int (*add)(struct glbStorage *self,
-	       const char *spec,
-	       const char *obj);
-
-    int (*get)(struct glbStorage *self,
-	       const char *spec);
-
-    int (*find)(struct glbStorage *self,
-		const char *spec,
-		const char *request);
-
-    int (*remove)(struct glbStorage *self,
-		  const char *spec);
-    
     int (*start)(struct glbStorage *self);
+
+    int (*process)(struct glbStorage *self, 
+		   struct glbData *data);
+
+    int (*add)(struct glbStorage *self, 
+		   struct glbData *data);
+
+    int (*get)(struct glbStorage *self, 
+		   struct glbData *data);
 
 };
 
