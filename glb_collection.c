@@ -29,7 +29,7 @@ void *glbColl_add_storage(void *arg)
     if (!backend) pthread_exit(NULL);
     zmq_bind(backend, "tcp://127.0.0.1:6911");
 
-    printf("   Collection storage device ready....\n");
+    printf("    ++ Collection storage device ready....\n");
 
     zmq_device(ZMQ_FORWARDER, frontend, backend);
 
@@ -61,13 +61,14 @@ glbColl_del(struct glbColl *self)
  
 static int 
 glbColl_find_route(struct glbColl *self,
-		   const char *spec,
+		   const char *topics,
 		   const char **dest_coll_addr)
 {
     const char *dest = NULL;
     
  
-    printf("    finding route to the appropriate Collection...\n");
+    printf("    !! Root Collection: finding route to the appropriate Collection...\n"
+	   "     TOPIC-based routing:\n %s\n\n", topics);
 
     *dest_coll_addr = dest;
 
@@ -135,10 +136,13 @@ int glbColl_new(struct glbColl **rec,
     self = malloc(sizeof(struct glbColl));
     if (!self) return glb_NOMEM;
 
+    memset(self, 0, sizeof(struct glbColl));
+
     glbColl_init(self);
 
 
     printf("  reading config %s...\n", config);
+    self->name = "ROOT COLLECTION";
 
     *rec = self;
     return glb_OK;

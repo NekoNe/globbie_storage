@@ -15,6 +15,8 @@ struct glbColl
     char *name;
     char *env_path;
 
+    void *context;
+
     struct glbCollRef *children;
 
     /**********  interface methods  **********/

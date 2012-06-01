@@ -28,6 +28,7 @@
 #include "glb_config.h"
 #include "glb_maze.h"
 #include "glb_set.h"
+#include "glb_utils.h"
 #include "oodict.h"
 
 static int 
@@ -309,7 +310,7 @@ glbMaze_add_spec(struct glbMaze *self,
 	printf("  spec already exists: %p!\n", item);
     }
 
-    printf(" add a loc to spec item...\n");
+    /*printf(" add a loc to spec item...\n");*/
 
 
     /* more specs */
@@ -352,7 +353,7 @@ glbMaze_add(struct glbMaze *self,
     name = (char *)xmlGetProp(input_node,  (const xmlChar *)"n");
     if (!name) return glb_FAIL;
 
-    printf(" add conc: %s\n", name);
+    /*printf(" add conc: %s\n", name); */
 
     /* link yourself back to the topic */
     /*if (topic_spec) {
@@ -373,13 +374,13 @@ glbMaze_add(struct glbMaze *self,
 	self->item_index[self->num_root_items] = item;
 	self->num_root_items++;
 
-	printf("  ++ root registration of item %s [%p]\n", 
-	       item->name, item);
+	/*printf("  ++ root registration of item %s [%p]\n", 
+	  item->name, item); */
     }
     xmlFree(name);
 
 
-    printf("MAZE %d ITEM: %s\n", self->id, item->name);
+    /* printf("MAZE %d ITEM: %s\n", self->id, item->name); */
 
     /* add locset */
 
@@ -405,25 +406,25 @@ glbMaze_sort_items(struct glbMaze *self)
 
 static int 
 glbMaze_read_XML(struct glbMaze *self, 
-		 const char *input,
-		 size_t input_size,
-		 const char *obj_id)
+		 struct glbData *data)
 {
     xmlDocPtr doc;
     xmlNodePtr root, cur_node;
     char *value;
     int ret = glb_OK;
 
-    printf(" Maze %d is parsing XML: %s\n [size: %d, obj_id: %s]\n", 
-	   self->id, input, input_size, obj_id);
+    /*printf("    !! Maze %d  got obj: %s\n", 
+      self->id, data->local_id); */
 
-    doc = xmlReadMemory(input, input_size, "none.xml", NULL, 0);
+    doc = xmlReadMemory(data->index, 
+			data->index_size, 
+			"none.xml", NULL, 0);
     if (!doc) {
         fprintf(stderr, "Failed to parse document\n");
 	return glb_FAIL;
     }
 
-    printf(" Maze %d: XML parse OK!\n", self->id);
+    /*printf("    ++ Maze %d: XML parse OK!\n", self->id); */
 
     root = xmlDocGetRootElement(doc);
     if (!root) {
@@ -443,11 +444,14 @@ glbMaze_read_XML(struct glbMaze *self,
         if (cur_node->type != XML_ELEMENT_NODE) continue;
 
 	if ((!xmlStrcmp(cur_node->name, (const xmlChar *)"conc"))) {
+
 	    ret = glbMaze_add(self, NULL, cur_node);
 	    if (ret == glb_NOMEM) goto error;
 
 	}
     }
+
+
 
  error:
 

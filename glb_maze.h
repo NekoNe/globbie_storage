@@ -23,6 +23,8 @@
 
 #include <libxml/parser.h>
 
+struct glbData;
+
 struct glbMazeRef
 {
     struct glbMazeItem *item;
@@ -105,9 +107,7 @@ struct glbMaze
     int (*sort)(struct glbMaze *self);
 
     int (*read)(struct glbMaze *self,
-		const char *input,
-		size_t input_size,
-		const char *obj_id);
+		struct glbData *data);
 
     struct glbMazeItem* (*alloc_item)(struct glbMaze *self);
     struct glbMazeSpec* (*alloc_spec)(struct glbMaze *self);
