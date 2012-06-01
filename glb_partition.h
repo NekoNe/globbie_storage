@@ -31,14 +31,8 @@ struct glbPartition
 
     int (*update)(struct glbPartition *self);
    
-    int (*add)(struct glbPartition *self,
-	       char *spec,
-	       size_t spec_size,
-	       void *obj,
-	       size_t obj_size,
-	       char *text,
-	       size_t text_size,
-	       const char **obj_id);
+    int (*add)(struct glbPartition *self, struct glbData *data);
+
 };
 
 extern int glbPartition_new(struct glbPartition **self);

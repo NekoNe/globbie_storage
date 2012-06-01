@@ -59,6 +59,8 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 #define LOGIC_OR  2
 
 
+#define GENERIC_TOPIC_NAME "Общее"
+
 /* debugging output levels */
 #define GLB_DEBUG_LEVEL_1 1
 #define GLB_DEBUG_LEVEL_2 1
@@ -109,12 +111,11 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 #define GLB_SMALL_DICT_SIZE 100
 #define GLB_TINY_DICT_SIZE 10
 
-
 #define GLB_MAZE_ITEM_STORAGE_SIZE 1024 * 1024
 #define GLB_MAZE_SPEC_STORAGE_SIZE 1024 * 1024
 #define GLB_MAZE_LOC_STORAGE_SIZE 1024 * 1024
 #define GLB_MAZE_MAX_DEPTH 3
 
-#define GLB_TEMP_BUF_SIZE 256
+#define GLB_TEMP_BUF_SIZE 1024
 
 #endif
