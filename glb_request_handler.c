@@ -114,17 +114,23 @@ glbRequestHandler_next_id(struct glbRequestHandler *self)
 }
 
 static int
-glbRequestHandler_buffering(struct glbRequestHandler *self)
+glbRequestHandler_read_buf(struct glbRequestHandler *self)
 {
     size_t res;
     int err;
     
-    err = self->set_pool[0]->data->buffering(self->set_pool[0]->data, self->offset, self->zero_buffer, GLB_LEAF_SIZE* GLB_ID_BLOCK_SIZE, &res);
+    err = self->set_pool[0]->data->read_buf(self->set_pool[0]->data, 
+					    self->offset, 
+					    self->zero_buffer, 
+					    GLB_LEAF_SIZE* GLB_ID_BLOCK_SIZE, 
+					    &res);
     if (res > 0) {
+
         self->zero_buffer_actual_size = res / GLB_ID_BLOCK_SIZE;
         self->zero_buffer_head = (size_t)0;
         self->zero_buffer_tail = (size_t)0;
         self->offset += res;
+
         return glb_OK;
     } /* TODO: checkup errors */
      
@@ -132,7 +138,10 @@ glbRequestHandler_buffering(struct glbRequestHandler *self)
 }
 
 static int
-glbRequestHandler_lookup(struct glbRequestHandler *self, struct glbIndexTreeNode *marker, char *id, struct glbIndexTreeNode **node)
+glbRequestHandler_lookup(struct glbRequestHandler *self, 
+			 struct glbIndexTreeNode *marker, 
+			 const char *id, 
+			 struct glbIndexTreeNode **node)
 {
     int left, right, res;
      
@@ -167,7 +176,10 @@ glbRequestHandler_leaf_intersection(struct glbRequestHandler *self)
     for (i = self->zero_buffer_tail, j = 0; i < self->zero_buffer_head; i++, j++) {
         
         /* copy ids to int_table */
-        memcpy(self->int_table->ids + j * GLB_ID_MATRIX_DEPTH, self->zero_buffer + i * GLB_ID_BLOCK_SIZE, GLB_ID_MATRIX_DEPTH); 
+        memcpy(self->int_table->ids + j * GLB_ID_MATRIX_DEPTH, 
+	       self->zero_buffer + i * GLB_ID_BLOCK_SIZE, 
+	       GLB_ID_MATRIX_DEPTH); 
+
         /* copy locset offsets to int_table */
         memcpy(&locset, self->zero_buffer + i * GLB_ID_BLOCK_SIZE + GLB_ID_MATRIX_DEPTH, GLB_SIZE_OF_OFFSET);
         self->int_table->locsets[0][j] = locset;
@@ -178,7 +190,7 @@ glbRequestHandler_leaf_intersection(struct glbRequestHandler *self)
 
     for (k = 1; k < self->set_pool_size; k++) {
         /* loading set[k] to swap buffer */
-        self->set_pool[k]->data->buffering(self->set_pool[k]->data, self->prev_nodes[k]->offset, self->swap, GLB_ID_BLOCK_SIZE * GLB_LEAF_SIZE, &res);
+        self->set_pool[k]->data->read_buf(self->set_pool[k]->data, self->prev_nodes[k]->offset, self->swap, GLB_ID_BLOCK_SIZE * GLB_LEAF_SIZE, &res);
         self->swap_size = res;
         self->swap_size = self->swap_size / GLB_ID_BLOCK_SIZE;
 
@@ -262,7 +274,7 @@ begin:
             goto begin;
         }
         if (self->zero_buffer_head == self->zero_buffer_tail) {
-            if (self->buffering(self)) {
+            if (self->read_buf(self)) {
                 return glb_EOB;
             }
             self->next_id(self);
@@ -332,15 +344,16 @@ glbRequestHandler_del(struct glbRequestHandler *self)
 }
 
 static int
-glbRequestHandler_init(struct glbRequestHandler *self, size_t result_size, 
-                                                       size_t offset, 
-                                                       struct glbSet **set_pool,
-                                                       size_t set_pool_size)
+glbRequestHandler_init(struct glbRequestHandler *self, 
+		       size_t result_size, 
+		       size_t offset, 
+		       struct glbSet **set_pool,
+		       size_t set_pool_size)
 {
     size_t i;
 
     self->next_id = glbRequestHandler_next_id;
-    self->buffering = glbRequestHandler_buffering;
+    self->read_buf = glbRequestHandler_read_buf;
     self->lookup = glbRequestHandler_lookup;
     self->leaf_intersection = glbRequestHandler_leaf_intersection;
     self->intersect = glbRequestHandler_intersect;
@@ -368,10 +381,11 @@ glbRequestHandler_init(struct glbRequestHandler *self, size_t result_size,
     return glb_OK;
 }
 
-int glbRequestHandler_new(struct glbRequestHandler **rec, size_t result_size, 
-                                                          size_t offset, 
-                                                          struct glbSet **set_pool,
-                                                          size_t set_pool_size)
+int glbRequestHandler_new(struct glbRequestHandler **rec, 
+			  size_t result_size, 
+			  size_t offset, 
+			  struct glbSet **set_pool,
+			  size_t set_pool_size)
 {
     struct glbRequestHandler *self;
     struct glbIntersectionTable *int_table,
