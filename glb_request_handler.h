@@ -21,17 +21,21 @@ typedef struct glbIntersectionTable
     size_t **locsets;
 
     /********** public methods **********/
+    int (*del)(struct glbIntersectionTable *self);
 
     int (*solve)(struct glbIntersectionTable *self); /* self intersection using locsets */
     int (*refresh)(struct glbIntersectionTable *self);
 
-    int (*init)(struct glbIntersectionTable *self, size_t answer_size, size_t set_pool_size);
-    /* destructor */
-    int (*del)(struct glbIntersectionTable *self);
+    int (*init)(struct glbIntersectionTable *self, 
+		size_t answer_size, 
+		size_t set_pool_size);
+
 
 } glbIntersectionTable; 
 
-extern int glbIntersectionTable_new(struct glbIntersectionTable **rec, size_t answer_size, size_t set_pool_size);
+extern int glbIntersectionTable_new(struct glbIntersectionTable **rec, 
+				    size_t answer_size, 
+				    size_t set_pool_size);
 
 
 typedef struct glbRequestHandler
@@ -65,16 +69,15 @@ typedef struct glbRequestHandler
     struct glbIndexTreeNode **prev_nodes;
 
     /*********** public methods **********/
+    int (*del)(struct glbRequestHandler *self);
 
-    /* intersectin sets */ 
     int (*intersect)(struct glbRequestHandler *self);
     
-    int (*init)(struct glbRequestHandler *self, size_t result_size,
-                                                size_t offset,
-                                                struct glbSet **set_pool,
-                                                size_t set_pool_size);
-    /* destructor */
-    int (*del)(struct glbRequestHandler *self);
+    int (*init)(struct glbRequestHandler *self, 
+		size_t result_size,
+		size_t offset,
+		struct glbSet **set_pool,
+		size_t set_pool_size);
 
     /*********** internal mathods **********/
 
@@ -82,7 +85,7 @@ typedef struct glbRequestHandler
     int (*next_id)(struct glbRequestHandler *self);
 
     /* loading new part of set to zero_buffer */
-    int (*buffering)(struct glbRequestHandler *self);
+    int (*read_buf)(struct glbRequestHandler *self);
 
     /* looking up IndexNode of specific id  */
     int (*lookup)(struct glbRequestHandler *self, 
@@ -97,10 +100,11 @@ typedef struct glbRequestHandler
 } glbRequestHandler;
 
 /* constructor */
-extern int glbRequestHandler_new(struct glbRequestHandler **rec, size_t result_size,
-                                                                 size_t offset,
-                                                                 struct glbSet **set_pool,
-                                                                 size_t set_pool_size);
+extern int glbRequestHandler_new(struct glbRequestHandler **rec, 
+				 size_t result_size,
+				 size_t offset,
+				 struct glbSet **set_pool,
+				 size_t set_pool_size);
 
 
 

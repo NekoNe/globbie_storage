@@ -9,6 +9,7 @@
 
 #include "glb_config.h"
 #include "glb_collection.h"
+#include "glb_utils.h"
 
 #define NUM_WORKERS 1
 
@@ -23,24 +24,15 @@ void *worker_routine(void *arg)
 {
     struct worker_args *args;
     struct glbColl *coll;
+
     void *client;
     void *publisher;
+    void *search;
+
     const char *dest_coll_addr = NULL;
     const char *result;
 
-    char *spec;
-    char *obj; 
-    char *text; 
-    char *interp;
-    char *topics;
-    char *index;
-
-    size_t spec_size = 0;
-    size_t obj_size  = 0;
-    size_t text_size = 0;
-    size_t interp_size = 0;
-    size_t topic_size = 0;
-    size_t index_size = 0;
+    struct glbData *data;
 
     int ret;
     char buf[1024];
@@ -48,49 +40,60 @@ void *worker_routine(void *arg)
     args = (struct worker_args*)arg;
     coll = args->collection;
 
+    ret = glbData_new(&data);
+    if (ret != glb_OK) pthread_exit(NULL);
+
     client = zmq_socket(args->zmq_context, ZMQ_PULL);
     if (!client) pthread_exit(NULL);
     ret = zmq_connect(client, "tcp://127.0.0.1:6909");
-
 
     publisher = zmq_socket(args->zmq_context, ZMQ_PUB);
     if (!publisher) pthread_exit(NULL);
     zmq_connect(publisher, "tcp://127.0.0.1:6910");
 
+    search = zmq_socket(args->zmq_context, ZMQ_PUSH);
+    if (!search) pthread_exit(NULL);
+    ret = zmq_connect(search, "tcp://127.0.0.1:6904");
+
     while (1) {
 
-	spec_size = 0;
-	text_size = 0;
-	obj_size = 0;
-	interp_size = 0;
-	topic_size = 0;
-	index_size = 0;
+	data->reset(data);
 
-        spec = s_recv(client, &spec_size);
-	obj = s_recv(client, &obj_size);
-	text = s_recv(client, &text_size);
-	topics = s_recv(client, &topic_size);
-	index = s_recv(client, &index_size);
+        data->spec = s_recv(client, &data->spec_size);
 
-        printf("    !! iCollection Reception #%d: got spec \"%s\"\n", 
-	       args->worker_id, spec);
+	if (strstr(data->spec, "ADD")) {
+	    data->obj = s_recv(client, &data->obj_size);
+	    data->text = s_recv(client, &data->text_size);
+	    data->topics = s_recv(client, &data->topic_size);
+	    data->index = s_recv(client, &data->index_size);
 
-	ret = coll->find_route(coll, topics, &dest_coll_addr);
+	    printf("    !! iCollection Reception #%d: got spec \"%s\"\n", 
+		   args->worker_id, data->spec);
 
-	/* stay in this collection */
-	if (!dest_coll_addr) {
-	    s_sendmore(publisher, spec, spec_size);
-	    s_sendmore(publisher, obj, obj_size);
-	    s_sendmore(publisher, text, text_size);
-	    s_sendmore(publisher, topics, topic_size);
-	    s_send(publisher, index, index_size);
+	    ret = coll->find_route(coll, data->topics, &dest_coll_addr);
+
+	    /* stay in this collection */
+	    if (!dest_coll_addr) {
+		s_sendmore(publisher, data->spec, data->spec_size);
+		s_sendmore(publisher, data->obj, data->obj_size);
+		s_sendmore(publisher, data->text, data->text_size);
+		s_sendmore(publisher, data->topics, data->topic_size);
+		s_send(publisher, data->index, data->index_size);
+	    }
+
 	}
 
-	free(spec);
-        free(obj);
-	free(text);
-        free(topics);
-        free(index);
+	if (strstr(data->spec, "FIND")) {
+	    printf("    !! iCollection Reception #%d: got FIND spec \"%s\"\n", 
+		   args->worker_id, data->spec);
+
+	    data->interp = s_recv(client, &data->interp_size);
+
+	    s_sendmore(search, data->spec, data->spec_size);
+	    s_send(search, data->interp, data->interp_size);
+
+	}
+
 
         fflush(stdout);
     }
@@ -101,7 +104,7 @@ void *worker_routine(void *arg)
     return;
 }
 
- void *glbColl_add_search_service(void *arg)
+void *glbColl_add_metadata_service(void *arg)
 {
     void *context;
     void *frontend;
@@ -115,6 +118,33 @@ void *worker_routine(void *arg)
 
     zmq_bind(frontend, "tcp://127.0.0.1:6902");
     zmq_bind(backend, "tcp://127.0.0.1:6903");
+
+    printf("    ++ Root iCollection Metadata Service is up and running!...\n\n");
+
+    zmq_device(ZMQ_QUEUE, frontend, backend);
+
+    /* we never get here */
+    zmq_close(frontend);
+    zmq_close(backend);
+    zmq_term(context);
+    return;
+}
+
+
+void *glbColl_add_search_service(void *arg)
+{
+    void *context;
+    void *frontend;
+    void *backend;
+    int ret;
+
+    context = zmq_init(1);
+
+    frontend = zmq_socket(context, ZMQ_PULL);
+    backend = zmq_socket(context, ZMQ_PUSH);
+
+    zmq_bind(frontend, "tcp://127.0.0.1:6904");
+    zmq_bind(backend, "tcp://127.0.0.1:6905");
 
     printf("    ++ Root iCollection Search Service is up and running!...\n\n");
 
@@ -135,7 +165,9 @@ main(int           const argc,
     void *context;
     void *publisher;
     struct glbColl *coll;
+
     pthread_t worker;
+    pthread_t metadata_service;
     pthread_t search_service;
 
     struct worker_args w_args[NUM_WORKERS];
@@ -154,12 +186,17 @@ main(int           const argc,
 
     coll->context = context;
 
+    /* add metadata service */
+    ret = pthread_create(&metadata_service,
+			 NULL,
+			 glbColl_add_metadata_service,
+			 (void*)coll);
+
     /* add search service */
     ret = pthread_create(&search_service,
 			 NULL,
 			 glbColl_add_search_service,
 			 (void*)coll);
-
 
     /* pool of threads */
     for (i = 0; i < NUM_WORKERS; i++) {

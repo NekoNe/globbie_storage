@@ -13,7 +13,7 @@ struct glbObjRecord
 struct glbPartition
 {
     int id;
-    const char *path;
+    char *path;
 
     char *service_address;
 

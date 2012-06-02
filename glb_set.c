@@ -8,51 +8,59 @@
 #include "glb_set_file.h"
 #include "glb_index_tree.h"
 
+#define GLB_DEBUG_SET_LEVEL_1 1
+#define GLB_DEBUG_SET_LEVEL_2 1
+#define GLB_DEBUG_SET_LEVEL_3 1
+#define GLB_DEBUG_SET_LEVEL_4 1
+
 static int 
-glbSet_lookup(struct glbSet *self, const char *id, size_t *locset_pointer)
+glbSet_lookup(struct glbSet *self, const char *id)
 {
     size_t offset;
-    int res;
+    int ret;
 
-    if (GLB_DEBUG_LEVEL_3) 
-        printf("Looking up id \"%c%c%c\" in the index...\n", id[0], id[1], id[2]);
+    if (GLB_DEBUG_SET_LEVEL_3) 
+        printf("Looking up id \"%s\" in the index...\n", id);
 
-    res = self->index->lookup(self->index, id, &offset, self->index->root); 
-    if (res == glb_NO_RESULTS) return glb_NO_RESULTS;
+    ret = self->index->lookup(self->index, id, &offset, self->index->root); 
+    if (ret == glb_NO_RESULTS) return ret;
 
-    if (GLB_DEBUG_LEVEL_4) 
+    if (GLB_DEBUG_SET_LEVEL_4) 
         printf("Reading offset \"%d\" from the data file...\n", offset);
    
-    res = self->data->lookup(self->data, id, &offset);
-    if (res == glb_NO_RESULTS) return glb_NO_RESULTS;
-    *locset_pointer = offset;
+    ret = self->data->lookup(self->data, id, offset);
+    if (ret == glb_NO_RESULTS) return ret;
 
-    if (GLB_DEBUG_LEVEL_3)
-        printf("Lookup success! Offset: %d\n", *locset_pointer);
+    if (GLB_DEBUG_SET_LEVEL_3)
+        printf("Lookup success!\n");
 
     return glb_OK;
 }
 
 static int
-glbSet_add(struct glbSet *self, const char *id, const char *bytecode, size_t bytecode_size)
+glbSet_add(struct glbSet *self, const char *id)
 {
-    int state;
+    int ret;
     size_t offset;
     struct glbIndexTreeNode *last;
     
     /* saving to file */
-    state = self->data->addByteCode(self->data, bytecode, bytecode_size, &offset);
-    state = self->data->addId(self->data, id, offset, &offset);
+    /*ret = self->data->addByteCode(self->data, bytecode, bytecode_size, &offset);*/
+
+    if (GLB_DEBUG_SET_LEVEL_2)
+        printf("  appending obj_id %s to file...\n", id);
+
+    ret = self->data->add(self->data, id, &offset);
 
     /* indexing */
-    if (self->index_counter % GLB_LEAF_SIZE == 0) {
-        state = self->index->addElem(self->index, id, offset);
-        state = self->index->update(self->index, self->index->root);
-        self->index_counter = 0;
+    if (self->num_objs % GLB_LEAF_SIZE == 0) {
+        ret = self->index->addElem(self->index, id, offset);
+        ret = self->index->update(self->index, self->index->root);
+        self->num_objs = 0;
     }
     self->index->array[self->index->node_count - 1].id_last = id;
 
-    self->index_counter++;
+    self->num_objs++;
     
     return glb_OK;
 }
@@ -71,67 +79,51 @@ glbSet_del(struct glbSet *self)
 }
 
 static int
-glbSet_init(struct glbSet *self, const char *name, const char *env_path)
+glbSet_init(struct glbSet *self, 
+	    const char *path,
+	    const char *name)
 {
+    int ret;
+    self->path = path;
+    self->name = name;
+
+    ret = self->data->init(self->data, path, name);
+    if (ret != glb_OK) return ret;
+
+    return glb_OK;
+}
+
+int glbSet_new(struct glbSet **rec)
+{
+    int ret;
+    struct glbSet *self;
+
+    self = malloc(sizeof(struct glbSet));
+    if (!self) return glb_NOMEM;
+
+    memset(self, 0, sizeof(struct glbSet));
+
+    /* creating inner structs */
+    ret = glbSetFile_new(&self->data);
+    if (ret) goto error;
+    self->data->set = self;
+
+
+    ret = glbIndexTree_new(&self->index);
+    if (ret) goto error;
+
+
+    /* init */
     self->init = glbSet_init;
     self->del = glbSet_del;
     self->add = glbSet_add;
     self->lookup = glbSet_lookup;
 
-    self->index_counter = 0;
-
-    /* setting name and path */
-    if (strlen(name)  + 1 > GLB_NAME_LENGTH)
-        return glb_FAIL;
-    strcpy(self->name, name);
-
-    if (strlen(env_path) + 1 > GLB_NAME_LENGTH)
-        return glb_FAIL;
-    strcpy(self->env_path, env_path);
-
-    return glb_OK;
-}
-
-int glbSet_new(struct glbSet **rec, const char *name, const char *env_path)
-{
-    int result;
-    struct glbSet *self;
-    struct glbSetFile *data;
-    struct glbIndexTree *index;
-
-    self = malloc(sizeof(struct glbSet));
-    if (!self) return glb_NOMEM;
-
-    self->data = NULL;
-    self->index = NULL;
-        
-    self->index_counter = 0;
-
-    self->init = NULL;
-    self->del = NULL;
-    self->add = NULL;
-    self->lookup = NULL;
-
-    memset(self->name, 0, GLB_NAME_LENGTH);
-    memset(self->env_path, 0, GLB_NAME_LENGTH);
-
-    /* creating inner structs */
-    result = glbSetFile_new(&data, name, env_path);
-    if (result) goto error;
-    self->data = data;
-
-    result = glbIndexTree_new(&index);
-    if (result) goto error;
-    self->index = index;
-
-    /* init */
-    result = glbSet_init(self, name, env_path);
-    if (result) goto error;
-
     *rec = self;
     return glb_OK;
 
 error:
+
     glbSet_del(self);
-    return result;
+    return ret;
 }

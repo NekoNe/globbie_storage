@@ -68,13 +68,13 @@ void *glbStorage_add_agent(void *arg)
     while (1) {
 
 	data->reset(data);
+	buf[0] = '\0';
 
 	printf("\n    ++ PARTITION AGENT #%d is ready to receive new tasks!\n", 
 	       args->agent_id);
 
 	data->spec = s_recv(outbox, &data->spec_size);
 
-	buf[0] = '\0';
 
 	if (strstr(data->spec, "ADD")) {
 
@@ -90,11 +90,11 @@ void *glbStorage_add_agent(void *arg)
 				 data);
 	    if (ret != glb_OK) goto final;
 
-	    /*printf("   new obj added: %s INDEX: %s\n", 
-	      data->local_id, data->index);*/
+	    printf("   new obj added: %s\n", 
+		   data->local_id);
 
-	    ret = maze->read(maze, 
-			     data);
+	    ret = maze->update(maze, 
+			       data);
 	    if (ret != glb_OK) goto final;
 
 	    /* notify register */
@@ -112,15 +112,17 @@ void *glbStorage_add_agent(void *arg)
 	    printf("    ++  PARTITION AGENT #%d: task complete!\n", 
 		   args->agent_id);
 
-	    /*sleep(1);*/
-	    goto final;
 	}
 
-	/*if (strstr(spec, "FIND")) {
-	  
-	    goto final;
+	if (strstr(data->spec, "FIND")) {
 
-	    }*/
+	    data->interp = s_recv(outbox, &data->interp_size);
+
+	    printf("    ++  PARTITION AGENT #%d: FIND: %s\n", 
+		   args->agent_id, data->interp);
+
+	}
+
 
     final:
 
@@ -288,8 +290,7 @@ void *glbStorage_add_registration(void *arg)
 }
 
 
-
-void *glbStorage_add_search_service(void *arg)
+void *glbStorage_add_metadata_service(void *arg)
 {
     void *context;
     void *reg;
@@ -319,20 +320,18 @@ void *glbStorage_add_search_service(void *arg)
 
 	data->reset(data);
 
-	printf("\n    ++ STORAGE SEARCH SERVICE is waiting for new tasks...\n");
+	printf("\n    ++ STORAGE METADATA SERVICE is waiting for new tasks...\n");
 
 	/* get the query */
         data->query = s_recv(coll, &data->query_size);
 
-	printf("    ++ STORAGE SEARCH SERVICE has got query:\n"
+	printf("    ++ STORAGE METADATA SERVICE has got query:\n"
                "       %s\n", data->query);
 
         /* metadata query */
 	/* check the registration */
         s_send(reg, data->query, data->query_size);
         data->reply = s_recv(reg, &data->reply_size);
-
-        /* fulltext query */
 
 
 	s_send(coll, data->reply, data->reply_size);
@@ -349,6 +348,60 @@ void *glbStorage_add_search_service(void *arg)
     return;
 }
 
+void *glbStorage_add_search_service(void *arg)
+{
+    void *context;
+    void *coll;
+    void *inbox;
+
+    struct glbStorage *storage;
+    struct glbData *data;
+
+    int ret;
+
+    storage = (struct glbStorage*)arg;
+    context = storage->context;
+
+    ret = glbData_new(&data);
+    if (ret != glb_OK) pthread_exit(NULL);
+
+    coll = zmq_socket(context, ZMQ_PULL);
+    if (!coll) pthread_exit(NULL);
+    zmq_connect(coll, "tcp://127.0.0.1:6905");
+
+    inbox = zmq_socket(context, ZMQ_PUSH);
+    if (!inbox) pthread_exit(NULL);
+    zmq_connect(inbox, "inproc://inbox");
+
+    while (1) {
+
+	data->reset(data);
+
+	printf("\n    ++ STORAGE SEARCH SERVICE is waiting for new tasks...\n");
+
+	/* get the query */
+        data->spec = s_recv(coll, &data->spec_size);
+	data->interp = s_recv(coll, &data->interp_size);
+
+	printf("    ++ STORAGE SEARCH SERVICE has got query:\n"
+               "       %s\n", data->query);
+
+        /* search query */
+        s_sendmore(inbox, data->spec, data->spec_size);
+        s_send(inbox, data->interp, data->interp_size);
+
+    final:
+
+        fflush(stdout);
+    }
+
+    /* we never get here */
+    zmq_close(coll);
+    zmq_close(inbox);
+    zmq_term(context);
+
+    return;
+}
 
 
 int 
@@ -362,6 +415,7 @@ main(int           const argc,
 
     pthread_t reception;
     pthread_t registration;
+    pthread_t metadata_service;
     pthread_t search_service;
 
     pthread_t agents[GLB_NUM_AGENTS];
@@ -391,6 +445,12 @@ main(int           const argc,
     ret = pthread_create(&registration,
 			 NULL,
 			 glbStorage_add_registration,
+			 (void*)storage);
+
+    /* add metadata service */
+    ret = pthread_create(&metadata_service,
+			 NULL,
+			 glbStorage_add_metadata_service,
 			 (void*)storage);
 
     /* add search service */

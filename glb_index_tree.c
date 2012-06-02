@@ -77,7 +77,10 @@ glbIndexTree_update(struct glbIndexTree *self, struct glbIndexTreeNode *tmp)
 }
 
 static int 
-glbIndexTree_lookup(struct glbIndexTree *self, const char *id, size_t *offset, struct glbIndexTreeNode *tmp)
+glbIndexTree_lookup(struct glbIndexTree *self, 
+		    const char *id, 
+		    size_t *offset, 
+		    struct glbIndexTreeNode *tmp)
 {
     int cmp_res;
     int lookup_res;
@@ -106,7 +109,9 @@ glbIndexTree_lookup(struct glbIndexTree *self, const char *id, size_t *offset, s
 }
 
 static int
-glbIndexTree_addElem(struct glbIndexTree *self, const char *id, size_t offset)
+glbIndexTree_addElem(struct glbIndexTree *self, 
+		     const char *id, 
+		     size_t offset)
 {
     struct glbIndexTreeNode *cur;
     struct glbIndexTreeNode *last;

@@ -1,3 +1,5 @@
+#ifndef GLB_SET_FILE_H
+#define GLB_SET_FILE_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,37 +8,42 @@
 
 typedef struct glbSetFile
 {
-    char path_set[GLB_NAME_LENGTH];
-    char path_locset[GLB_NAME_LENGTH];
-   
+    const char *path;
+    const char *name;
+
+    char *filename;
+
+    struct glbSet *set;
+
     /* memory to do operations */
     char *buffer;
     size_t buffer_size;
 
     /**********  public methods  **********/
 
-    int (*init)(struct glbSetFile *self, const char *name, const char *env_path);
+    int (*init)(struct glbSetFile *self, 
+		const char *path, 
+		const char *name);
+
     int (*del)(struct glbSetFile *self); /* destructor */
 
     /* contains part of set file to buffer */ 
-    int (*buffering)(struct glbSetFile *self, size_t offset, char *buffer, size_t size, size_t *result);
+    int (*read_buf)(struct glbSetFile *self, 
+		    size_t offset, 
+		    char *buf, 
+		    size_t buf_size, 
+		    size_t *buf_read_size);
     
-    /* looking up id and getting it's locset offset */
-    int (*lookup)(struct glbSetFile *self, const char *id, size_t *offset);
-    
-    /* looking up id in buffer and getting locset offset */
-    int (*lookupInBuffer)(struct glbSetFile *self, const char *id, size_t *offset, size_t buff_size); 
-    
-    /* writing locset into locset file */
-    int (*addByteCode)(struct glbSetFile *self, const char *bytecode, size_t bytecode_size, size_t *offset);
-    /*writing id and locset offset into set file */
-    int (*addId)(struct glbSetFile *self, const char *id, size_t locset_p, size_t *offset);
+    /* looking up obj_id */
+    int (*lookup)(struct glbSetFile *self, const char *id, size_t offset);
 
-    /* init files */
-    int (*create_files)(struct glbSetFile *self);
+    /* appending id  */
+    int (*add)(struct glbSetFile *self, const char *id, size_t *offset);
 
 } glbSetFile;
 
 /* constructor */
-extern int glbSetFile_new(struct glbSetFile **self, const char *name, const char *env_path);
+extern int glbSetFile_new(struct glbSetFile **self);
 
+
+#endif

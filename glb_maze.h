@@ -24,20 +24,12 @@
 #include <libxml/parser.h>
 
 struct glbData;
+struct glbSet;
 
 struct glbMazeRef
 {
     struct glbMazeItem *item;
     struct glbMazeRef *next;
-};
-
-/* original location */
-struct glbMazeLoc
-{
-    size_t linear_begin;
-    size_t linear_end;
-
-    struct glbMazeLoc *next;
 };
 
 struct glbMazeSpec
@@ -69,8 +61,11 @@ struct glbMazeItem
     struct glbMazeItem *subclasses;
     struct glbMazeItem *peers;
 
-    struct glbMazeLoc *locs;
-    size_t num_locs;
+    struct glbSet *set;
+    const char *set_path;
+
+    size_t num_objs;
+    size_t weight;
 
     struct glbMazeItem *next;
 };
@@ -78,6 +73,9 @@ struct glbMazeItem
 struct glbMaze
 {
     int id;
+
+    char *path;
+    size_t path_size;
 
     struct glbMazeItem *item_storage;
     struct glbMazeItem **item_index;
@@ -89,11 +87,19 @@ struct glbMaze
     size_t num_specs;
     size_t spec_storage_size;
 
-    struct glbMazeLoc *loc_storage;
-    size_t num_locs;
-    size_t loc_storage_size;
+    struct glbSet **cache_set_storage;
+    size_t num_cache_sets;
+    size_t cache_set_storage_size;
+
+    struct glbSet **agent_set_storage;
+    size_t num_agent_sets;
+    size_t agent_set_storage_size;
 
     struct ooDict *item_dict;
+
+    struct ooSet **search_set_pool;
+    size_t search_set_pool_size;
+    size_t max_set_pool_size;
 
     /******** public methods ********/
     int (*init)(struct glbMaze *self);
@@ -102,17 +108,18 @@ struct glbMaze
 
     int (*add)(struct glbMaze *self,
 	       struct glbMazeSpec *topic,
-	       xmlNodePtr input_node);
+	       xmlNodePtr input_node,
+	       const char *name,
+	       const char *obj_id);
 
     int (*sort)(struct glbMaze *self);
 
-    int (*read)(struct glbMaze *self,
-		struct glbData *data);
+    int (*update)(struct glbMaze *self,
+		  struct glbData *data);
 
-    struct glbMazeItem* (*alloc_item)(struct glbMaze *self);
-    struct glbMazeSpec* (*alloc_spec)(struct glbMaze *self);
-    struct glbMazeLoc* (*alloc_loc)(struct glbMaze *self);
-    struct glbMazeRef* (*alloc_ref)(struct glbMaze *self);
+    int (*search)(struct glbMaze *self,
+		  struct glbData *data);
+
 };
 
 /* constructor */

@@ -241,8 +241,9 @@ int glbStorage_new(struct glbStorage **rec,
 {
     struct glbStorage *self;
     struct ooDict *dict, *storage;
-    int ret;
-    size_t i, count; /* max num of docs */
+    char buf[GLB_TEMP_BUF_SIZE];
+    char *path;
+    int i, ret;
     
     self = malloc(sizeof(struct glbStorage));
     if (!self) return glb_NOMEM;
@@ -278,7 +279,16 @@ int glbStorage_new(struct glbStorage **rec,
 	    glbStorage_del(self);
 	    return ret;
 	}
+
 	self->mazes[i]->id = i;
+
+	sprintf(buf, "maze%d", i);
+	path = strdup(buf);
+	if (!path) return glb_NOMEM;
+
+	self->mazes[i]->path = path;
+	self->mazes[i]->path_size = strlen(path);
+
     }
 
     self->num_agents = GLB_NUM_AGENTS;
