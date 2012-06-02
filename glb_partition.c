@@ -20,8 +20,8 @@ glbPartition_del(struct glbPartition *self)
 {
     int i;
 
-    if (!self) return glb_OK;
-    
+    if (self->path) free(self->path);
+
     free(self);
     return glb_OK;
 }
@@ -234,7 +234,8 @@ int glbPartition_new(struct glbPartition **rec)
 
     memset(self, 0, sizeof(struct glbPartition));
 
-    self->path = "storage";
+    self->path = strdup("storage");
+    if (!self->path) return glb_NOMEM;
 
     self->max_num_objs = GLB_RADIX_BASE;
     for (i = 0; i < GLB_ID_MATRIX_DEPTH - 1; i++) {
