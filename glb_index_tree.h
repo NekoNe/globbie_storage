@@ -33,8 +33,12 @@ typedef struct glbIndexTree
 
     /* find id */
     int (*addElem)(struct glbIndexTree *self, const char *id, size_t offset);
+
     /* lookup leaf containig id */
-    int (*lookup)(struct glbIndexTree *self, const char *id, size_t *offset, struct glbIndexTreeNode *tmp);
+    int (*lookup)(struct glbIndexTree *self, 
+		  const char *id, 
+		  size_t *offset, 
+		  struct glbIndexTreeNode *tmp);
 
     /* tree balance */
     int (*update)(struct glbIndexTree *self, struct glbIndexTreeNode *tmp);

@@ -112,7 +112,6 @@ int glbSet_new(struct glbSet **rec)
     ret = glbIndexTree_new(&self->index);
     if (ret) goto error;
 
-
     /* init */
     self->init = glbSet_init;
     self->del = glbSet_del;

@@ -70,6 +70,10 @@ glbColl_find_route(struct glbColl *self,
     printf("    !! Root Collection: finding route to the appropriate Collection...\n"
 	   "     TOPIC-based routing:\n %s\n\n", topics);
 
+    /* TODO: proper selection */
+    
+    printf("   ++ Collection chosen: %s\n", self->name);
+
     *dest_coll_addr = dest;
 
     return glb_OK;

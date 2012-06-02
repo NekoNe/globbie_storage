@@ -186,7 +186,8 @@ int glbIndexTree_new(struct glbIndexTree **rec)
 
     self->array = NULL;
 
-    self->array = malloc((GLB_ID_MAX_COUNT / GLB_LEAF_SIZE) * sizeof(struct glbIndexTreeNode));
+    self->array = malloc((GLB_ID_MAX_COUNT / GLB_LEAF_SIZE) *\
+			 sizeof(struct glbIndexTreeNode));
     if (!self->array) goto error;
 
     for (i = 0; i < GLB_ID_MAX_COUNT / GLB_LEAF_SIZE; i++) {

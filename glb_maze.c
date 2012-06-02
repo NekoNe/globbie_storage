@@ -385,20 +385,37 @@ static int
 glbMaze_add_search_term(struct glbMaze *self, 
 			const char *name)
 {
+    struct glbSet *set;
+    int ret;
 
-    printf("  .. add search term %s\n", name);
-    
+    printf("\n  .. add search term %s\n", name);
+
+    /* take one of the agents */
+    set = glbMaze_alloc_agent_set(self);
+    if (!set) return glb_NOMEM;
+
+    ret = set->init(set,
+		    (const char*)self->path, 
+		    (const char*)name);
+    if (ret != glb_OK) return ret;
+
+
+    self->search_set_pool[self->search_set_pool_size] = set;
+    self->search_set_pool_size++;
+  
+    printf("OK!\n");
 
     return glb_OK;
 }
 
-static int 
+static int
 glbMaze_search(struct glbMaze *self, 
 	       struct glbData *data)
 {
     xmlDocPtr doc;
     xmlNodePtr root, cur_node;
-    char *value;
+    struct glbRequestHandler *request;
+    char *value = NULL;
     int ret = glb_OK;
 
     if (DEBUG_MAZE_LEVEL_1)
@@ -448,6 +465,28 @@ glbMaze_search(struct glbMaze *self,
 
 	}
     }
+
+
+    printf("NUM SETS: %d\n", self->search_set_pool_size);
+
+
+    /* TODO sort sets by usage frequency */
+
+    ret = glbRequestHandler_new(&request, 
+			  GLB_RESULT_BATCH_SIZE, 
+			  self->search_set_pool,
+			  self->search_set_pool_size);
+    if (ret != glb_OK) return ret;
+
+    /* TODO: intersection */
+
+    /*
+    request->intersect(request);
+    for (j = 0; j < request->result_actual_size; j += 1) {
+	i = j * GLB_ID_BLOCK_SIZE;
+	printf("%c%c%c\n", request->result[i],request->result[i + 1],request->result[i + 2]);
+	}*/
+  
 
 
  error:
@@ -510,8 +549,6 @@ glbMaze_update(struct glbMaze *self,
 
 	    value = (char*)xmlGetProp(cur_node,  (const xmlChar *)"n");
 	    if (!value) continue;
-
-	    printf("CONC: %s\n", value);
 
 	    ret = glbMaze_add(self, 
 			      NULL, 
@@ -608,6 +645,13 @@ glbMaze_new(struct glbMaze **maze)
 	self->agent_set_storage[i] = set;
     }
     self->agent_set_storage_size = GLB_MAZE_AGENT_SET_STORAGE_SIZE;
+
+
+    self->search_set_pool = malloc(GLB_MAZE_AGENT_SET_STORAGE_SIZE *\
+				     sizeof(struct glbSet*));
+    if (!self->search_set_pool) return glb_NOMEM;
+    self->max_search_set_pool_size = GLB_MAZE_AGENT_SET_STORAGE_SIZE;
+
 
     /* TODO: allocate cache sets */
 

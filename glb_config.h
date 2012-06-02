@@ -68,6 +68,8 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 #define GLB_DEBUG_LEVEL_4 0
 #define GLB_DEBUG_LEVEL_5 0
 
+#define GLB_RESULT_BATCH_SIZE 20
+
 #define GLB_RHANDLER_DEBUG_LEVEL_1 0
 #define GLB_RHANDLER_DEBUG_LEVEL_2 0
 #define GLB_RHANDLER_DEBUG_LEVEL_3 0
