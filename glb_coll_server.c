@@ -59,8 +59,10 @@ void *worker_routine(void *arg)
 
 	data->reset(data);
 
+	/* waiting for spec */
         data->spec = s_recv(client, &data->spec_size);
 
+	/* add new object */
 	if (strstr(data->spec, "ADD")) {
 	    data->obj = s_recv(client, &data->obj_size);
 	    data->text = s_recv(client, &data->text_size);
@@ -83,15 +85,24 @@ void *worker_routine(void *arg)
 
 	}
 
+	/* find objects */
 	if (strstr(data->spec, "FIND")) {
+
 	    printf("    !! iCollection Reception #%d: got FIND spec \"%s\"\n", 
 		   args->worker_id, data->spec);
 
+	    data->topics = s_recv(client, &data->topic_size);
+	    
 	    data->interp = s_recv(client, &data->interp_size);
 
-	    s_sendmore(search, data->spec, data->spec_size);
-	    s_send(search, data->interp, data->interp_size);
+	    ret = coll->find_route(coll, data->topics, &dest_coll_addr);
 
+	    /* stay in this collection */
+	    if (!dest_coll_addr) {
+		s_sendmore(search, data->spec, data->spec_size);
+		s_sendmore(search, data->topics, data->topic_size);
+		s_send(search, data->interp, data->interp_size);
+	    }
 	}
 
 

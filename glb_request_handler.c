@@ -181,7 +181,9 @@ glbRequestHandler_leaf_intersection(struct glbRequestHandler *self)
 	       GLB_ID_MATRIX_DEPTH); 
 
         /* copy locset offsets to int_table */
-        memcpy(&locset, self->zero_buffer + i * GLB_ID_BLOCK_SIZE + GLB_ID_MATRIX_DEPTH, GLB_SIZE_OF_OFFSET);
+        memcpy(&locset, 
+	       self->zero_buffer + i * GLB_ID_BLOCK_SIZE + GLB_ID_MATRIX_DEPTH, 
+	       GLB_SIZE_OF_OFFSET);
         self->int_table->locsets[0][j] = locset;
     }
     self->int_table->answer_actual_size = j;
@@ -190,7 +192,11 @@ glbRequestHandler_leaf_intersection(struct glbRequestHandler *self)
 
     for (k = 1; k < self->set_pool_size; k++) {
         /* loading set[k] to swap buffer */
-        self->set_pool[k]->data->read_buf(self->set_pool[k]->data, self->prev_nodes[k]->offset, self->swap, GLB_ID_BLOCK_SIZE * GLB_LEAF_SIZE, &res);
+        self->set_pool[k]->data->read_buf(self->set_pool[k]->data, 
+					  self->prev_nodes[k]->offset, 
+					  self->swap, 
+					  GLB_ID_BLOCK_SIZE * GLB_LEAF_SIZE, 
+					  &res);
         self->swap_size = res;
         self->swap_size = self->swap_size / GLB_ID_BLOCK_SIZE;
 
@@ -200,10 +206,15 @@ glbRequestHandler_leaf_intersection(struct glbRequestHandler *self)
         glbIntersectionTable_refresh(self->res_table);
         for (i = 0; i < self->int_table->answer_actual_size; i++) {
             for (j = swap_cursor; j < self->swap_size; j++) {
-                comp_res = compare(self->int_table->ids + i * GLB_ID_MATRIX_DEPTH, self->swap + j * GLB_ID_BLOCK_SIZE);
+                comp_res = compare(self->int_table->ids + i * GLB_ID_MATRIX_DEPTH, 
+				   self->swap + j * GLB_ID_BLOCK_SIZE);
                 if (comp_res != glb_EQUALS) continue;
-                memcpy(self->res_table->ids + res_table_cursor * GLB_ID_MATRIX_DEPTH, self->swap + j * GLB_ID_BLOCK_SIZE, GLB_ID_MATRIX_DEPTH);
-                memcpy(&locset, self->swap + j * GLB_ID_BLOCK_SIZE + GLB_ID_MATRIX_DEPTH, GLB_SIZE_OF_OFFSET);
+                memcpy(self->res_table->ids + res_table_cursor * GLB_ID_MATRIX_DEPTH, 
+		       self->swap + j * GLB_ID_BLOCK_SIZE, 
+		       GLB_ID_MATRIX_DEPTH);
+                memcpy(&locset, 
+		       self->swap + j * GLB_ID_BLOCK_SIZE + GLB_ID_MATRIX_DEPTH, 
+		       GLB_SIZE_OF_OFFSET);
                 self->res_table->locsets[k][res_table_cursor] = locset;
                 res_table_cursor++;
                 swap_cursor = j;
@@ -211,6 +222,7 @@ glbRequestHandler_leaf_intersection(struct glbRequestHandler *self)
                 break;
             }
         }
+
         /* swaping int_table with res_table */
         tmp = self->int_table;
         self->int_table = self->res_table;
@@ -219,11 +231,17 @@ glbRequestHandler_leaf_intersection(struct glbRequestHandler *self)
 
     /* writing this part of result to final */
     i = 0;
-    while ((self->result->answer_actual_size < self->result->answer_size) && (i < self->int_table->answer_actual_size)) {
-        memcpy(self->result->ids + self->result->answer_actual_size * GLB_ID_MATRIX_DEPTH, self->int_table->ids + i * GLB_ID_MATRIX_DEPTH, GLB_ID_MATRIX_DEPTH);
+    while ((self->result->answer_actual_size < self->result->answer_size) &&\
+	   (i < self->int_table->answer_actual_size)) {
+
+        memcpy(self->result->ids + self->result->answer_actual_size * GLB_ID_MATRIX_DEPTH, 
+	       self->int_table->ids + i * GLB_ID_MATRIX_DEPTH, 
+	       GLB_ID_MATRIX_DEPTH);
+
         for (j = 0; j < self->set_pool_size; j++) {
             self->result->locsets[j][self->result->answer_actual_size] = self->int_table->locsets[j][i];
         }
+
         self->result->answer_actual_size++; 
         i++;
     }
@@ -318,7 +336,7 @@ begin:
 
     goto begin;
 
-    /* we will never get here. buffer will end definitly */
+    /* we will never get here. buffer will end definitely */
     return glb_OK;
 }
 
