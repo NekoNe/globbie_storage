@@ -29,6 +29,7 @@
 #include "glb_maze.h"
 #include "glb_set.h"
 #include "glb_utils.h"
+#include "glb_request_handler.h"
 #include "oodict.h"
 
 #define DEBUG_MAZE_LEVEL_1 1
@@ -52,6 +53,23 @@ glbMaze_item_cmp(const void *a,
     /* ascending order */
 
 /*    if ((*item1)->num_locs > (*item2)->num_locs) return 1;*/
+
+    return -1;
+}
+
+static int 
+glbSet_cmp(const void *a,
+	   const void *b)
+{
+    struct glbSet **set1, **set2;
+
+    set1 = (struct glbSet**)a;
+    set2 = (struct glbSet**)b;
+
+    if ((*set1)->num_objs == (*set2)->num_objs) return 0;
+
+    /* ascending order */
+    if ((*set1)->num_objs > (*set2)->num_objs) return 1;
 
     return -1;
 }
@@ -135,9 +153,6 @@ glbMaze_del(struct glbMaze *self)
 
     if (self->spec_storage)
 	free(self->spec_storage);
-
-    if (self->cache_set_storage)
-	free(self->cache_set_storage);
 
     if (self->agent_set_storage)
 	free(self->agent_set_storage);
@@ -315,8 +330,6 @@ glbMaze_add(struct glbMaze *self,
     size_t name_size;
     int ret;
 
-    printf("  !maze register: %s\n", name);
-
     name_size = strlen(name);
 
     /* registration of a new root item */
@@ -334,35 +347,39 @@ glbMaze_add(struct glbMaze *self,
 	self->item_index[self->num_root_items] = item;
 	self->num_root_items++;
 
-	/*if (DEBUG_MAZE_LEVEL_3)*/
+	if (DEBUG_MAZE_LEVEL_3)
 	    printf("  ++ root registration of item %s\n", 
 		   item->name);
     }
 
     /* add obj_id to appropriate set */
 
-    /* TODO: set in cache? */
+    /* TODO: set already in cache? */
 
     /* take one of the agents */
     set = glbMaze_alloc_agent_set(self);
     if (!set) return glb_NOMEM;
 
-    printf(" %s : Agent Set ready: %p\n", 
-	   self->path, set->init);
+    if (DEBUG_MAZE_LEVEL_1)
+	printf("   %s : Agent Set ready: %p\n", 
+	       self->path, set->init);
 
     ret = set->init(set,
 		    (const char*)self->path, 
 		    (const char*)item->name);
 
+    printf("   set file init: %d\n", ret);
+
     if (ret != glb_OK) return ret;
 
-    printf(" add obj_id %s to %s/%s...\n", 
-	   obj_id, self->path, item->name );
+    if (DEBUG_MAZE_LEVEL_1)
+	printf(" add obj_id %s to %s/%s...\n", 
+	       obj_id, self->path, item->name );
 
     ret = set->add(set, obj_id);
     if (ret != glb_OK) return ret;
 
-
+    item->num_objs++;
 
     return glb_OK;
 }
@@ -385,10 +402,23 @@ static int
 glbMaze_add_search_term(struct glbMaze *self, 
 			const char *name)
 {
+    struct glbMazeItem *item;
     struct glbSet *set;
     int ret;
 
-    printf("\n  .. add search term %s\n", name);
+    if (DEBUG_MAZE_LEVEL_2)
+	printf("\n  .. add search term %s\n", name);
+
+    item = self->item_dict->get(self->item_dict, name);
+    if (!item) {
+	if (DEBUG_MAZE_LEVEL_2)
+	    printf("\n  .. no such set found: %s\n", name);
+
+	return glb_NO_RESULTS;
+    }
+
+
+
 
     /* take one of the agents */
     set = glbMaze_alloc_agent_set(self);
@@ -399,12 +429,12 @@ glbMaze_add_search_term(struct glbMaze *self,
 		    (const char*)name);
     if (ret != glb_OK) return ret;
 
+    set->num_objs = item->num_objs;
+    item->num_requests++;
 
     self->search_set_pool[self->search_set_pool_size] = set;
     self->search_set_pool_size++;
   
-    printf("OK!\n");
-
     return glb_OK;
 }
 
@@ -417,6 +447,8 @@ glbMaze_search(struct glbMaze *self,
     struct glbRequestHandler *request;
     char *value = NULL;
     int ret = glb_OK;
+    char buf[GLB_ID_MATRIX_DEPTH + 1];
+    int i;
 
     if (DEBUG_MAZE_LEVEL_1)
 	printf("    !! Maze %d  search...\n", 
@@ -461,32 +493,48 @@ glbMaze_search(struct glbMaze *self,
 	    if (!value) return glb_FAIL;
 
 	    ret = glbMaze_add_search_term(self, value);
-	    if (ret == glb_NOMEM) goto error;
+	    if (ret != glb_OK) goto error;
 
 	}
     }
 
-
     printf("NUM SETS: %d\n", self->search_set_pool_size);
 
+    if (self->search_set_pool_size == 0) return glb_NO_RESULTS;
 
-    /* TODO sort sets by usage frequency */
+    /* sorting the sets by size */
+    qsort(self->search_set_pool, 
+	  self->search_set_pool_size, 
+	  sizeof(struct glbSet*), glbSet_cmp);
 
     ret = glbRequestHandler_new(&request, 
-			  GLB_RESULT_BATCH_SIZE, 
-			  self->search_set_pool,
-			  self->search_set_pool_size);
+				GLB_RESULT_BATCH_SIZE,
+				0, 
+				self->search_set_pool,
+				self->search_set_pool_size);
     if (ret != glb_OK) return ret;
 
-    /* TODO: intersection */
+    printf("  intersection started...\n");
 
-    /*
     request->intersect(request);
-    for (j = 0; j < request->result_actual_size; j += 1) {
-	i = j * GLB_ID_BLOCK_SIZE;
-	printf("%c%c%c\n", request->result[i],request->result[i + 1],request->result[i + 2]);
+
+    printf("NUM RESULTS: %d\n", request->result->answer_actual_size);
+
+
+    /* for (i = 0; i <  request->result->answer_actual_size; i++) {
+	memcpy(buf, request->result->ids[GLB_ID_MATRIX_DEPTH * i], GLB_ID_MATRIX_DEPTH);
+	buf[GLB_ID_MATRIX_DEPTH] = '\0';
+	printf("%s\n", buf);
 	}*/
-  
+    request->result->ids[GLB_ID_MATRIX_DEPTH * request->result->answer_actual_size] = '\0';
+    printf("%s\n", request->result->ids);
+
+    /* для каждого id читаем его текст и индекс */
+    
+          /* в индексе находим все концепты и извлекаем списки линейных позиций */
+
+           /* функция формирования фрагмента с подсветкой */
+
 
 
  error:
@@ -653,7 +701,24 @@ glbMaze_new(struct glbMaze **maze)
     self->max_search_set_pool_size = GLB_MAZE_AGENT_SET_STORAGE_SIZE;
 
 
-    /* TODO: allocate cache sets */
+    /* allocate cache sets */
+    for (i = 0; i < GLB_MAZE_CACHE_SET_STORAGE_SIZE; i++) {
+	ret = glbSet_new(&set);
+	if (ret != glb_OK) return glb_NOMEM;
+
+	/* first set */
+	if (!self->head) {
+	    self->head = set;
+	    self->tail = set;
+	    continue;
+	}
+	
+	set->next = self->head;
+	self->head = set;
+    }
+    self->cache_set_storage_size = GLB_MAZE_CACHE_SET_STORAGE_SIZE;
+
+
 
     glbMaze_init(self);
 

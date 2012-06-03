@@ -5,8 +5,14 @@
 #include <string.h>
 
 #include "glb_set_file.h"
+#include "glb_index_tree.h"
 #include "glb_config.h"
 #include "glb_utils.h"
+
+#define GLB_DEBUG_SETFILE_LEVEL_1 1
+#define GLB_DEBUG_SETFILE_LEVEL_2 1
+#define GLB_DEBUG_SETFILE_LEVEL_3 1
+#define GLB_DEBUG_SETFILE_LEVEL_4 1
 
 static int
 glbSetFile_open_file(struct glbSetFile *self)
@@ -49,6 +55,9 @@ glbSetFile_read_buf(struct glbSetFile *self,
     int fd;
     size_t res;
 
+    printf("  ..read buf of size %d from file \"%s\", offset %d, \n", 
+	   size, self->filename, offset);
+
     fd = open(self->filename, O_RDONLY);
     if (fd < 0) {
         close(fd);
@@ -58,11 +67,15 @@ glbSetFile_read_buf(struct glbSetFile *self,
     lseek(fd, offset, SEEK_SET);
     res = read(fd, buffer, size);
     
+    printf("   ++ actual read: %d\n", res);
+
     *result = res; 
     
     close(fd); 
     return glb_OK;
 }
+
+
 
 static int
 glbSetFile_buf_lookup(struct glbSetFile *self, 
@@ -75,23 +88,28 @@ glbSetFile_buf_lookup(struct glbSetFile *self,
 
     for (i = 0; i < buf_size; i += GLB_ID_MATRIX_DEPTH) {
 	cur_id = self->buffer + i;
-	if (!strcmp(id, cur_id)) return glb_OK;
+
+	res = compare(cur_id, id);
+        if (res == glb_EQUALS) return glb_OK;
+        if (res == glb_MORE) return glb_NO_RESULTS;
     }
 
-    if (GLB_DEBUG_LEVEL_4)
+    if (GLB_DEBUG_SETFILE_LEVEL_4)
         printf("    ID was not found in set\n");
 
     return glb_NO_RESULTS;
 }
 
 static int
-glbSetFile_lookup(struct glbSetFile *self, const char *id, size_t offset)
+glbSetFile_lookup(struct glbSetFile *self, 
+		  const char *id, 
+		  size_t offset)
 {
     int fd;
     int res;
     size_t buf_size;
 
-    if (GLB_DEBUG_LEVEL_4)
+    if (GLB_DEBUG_SETFILE_LEVEL_4)
         printf("    Looking up obj_id \"%s\" in the set file...\n", id);
     
     fd = open(self->filename, O_RDONLY); 
@@ -101,10 +119,10 @@ glbSetFile_lookup(struct glbSetFile *self, const char *id, size_t offset)
     buf_size = read(fd, self->buffer, self->buffer_size);
     close(fd);
 
-    if (GLB_DEBUG_LEVEL_4) 
+    if (GLB_DEBUG_SETFILE_LEVEL_4) 
         printf("    Buffer was read from file. Buffer size: %d\n", buf_size);
 
-    return  glbSetFile_buf_lookup(self, id, buf_size);
+    return glbSetFile_buf_lookup(self, id, buf_size);
 }
 
 static int
@@ -132,6 +150,55 @@ glbSetFile_add(struct glbSetFile *self,
     return glb_OK;
 }
     
+
+static int
+glbSetFile_read_index(struct glbSetFile *self, 
+		      struct glbIndexTree *index)
+{
+
+    char buf[GLB_ID_MATRIX_DEPTH * GLB_LEAF_SIZE];
+    const size_t buf_size = GLB_ID_MATRIX_DEPTH * GLB_LEAF_SIZE;
+    char id[GLB_ID_MATRIX_DEPTH + 1];
+    int fd;
+    size_t offset = 0;
+    size_t res;
+    int ret = glb_OK;
+    struct glbIndexTreeNode *node;
+
+    printf("\n   batch read size: %d buf...\n", buf_size);
+
+    fd = open(self->filename, O_RDONLY);
+    if (fd < 0) {
+        close(fd);
+	/* no index found */
+        return glb_OK;
+    }
+    
+    while (res = read(fd, buf, buf_size)) {
+
+	memcpy(id, buf, GLB_ID_MATRIX_DEPTH);
+
+	printf("\n   ++ actual batch read: %d bytes from %s...\n", res, self->filename);
+
+	ret = index->addElem(index, (const char*)id, offset);
+	if (ret != glb_OK) goto error;
+
+
+	node = &index->array[index->node_count - 1];
+	node->id_last = node->id;
+
+
+	offset += res;
+    }
+
+    
+error:
+    close(fd); 
+
+    return ret;
+}
+
+
 
 static int 
 glbSetFile_del(struct glbSetFile *self)
@@ -165,12 +232,15 @@ glbSetFile_init(struct glbSetFile *self,
     if (ret != glb_OK) return ret;
 
     sprintf(buf, "%s/%s.set", path, name);
+
     self->filename = strdup(buf);
     if (!self->filename) return glb_NOMEM;
 
+    printf("  init set filename: %s...\n", self->filename);
+
+    /* TODO check header */
     /*ret = glbSetFile_open_file(self);
       if (ret != glb_OK) return ret;*/
-
 
     return glb_OK; 
 }
@@ -187,7 +257,7 @@ int glbSetFile_new(struct glbSetFile **rec)
     
     memset(self, 0, sizeof(struct glbSetFile));
     
-    size = (GLB_ID_MATRIX_DEPTH * sizeof(char) + 1) * GLB_LEAF_SIZE;
+    size = (GLB_ID_MATRIX_DEPTH * sizeof(char)) * GLB_LEAF_SIZE;
 
     self->buffer = malloc(size);
     if (!self->buffer) return glb_NOMEM;
@@ -199,6 +269,7 @@ int glbSetFile_new(struct glbSetFile **rec)
     self->add = glbSetFile_add;
     self->lookup = glbSetFile_lookup;
 
+    self->read = glbSetFile_read_index;
     self->read_buf = glbSetFile_read_buf;
 
 

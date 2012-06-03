@@ -17,7 +17,7 @@ struct glbSet
     /* number of ids in set */
     size_t num_objs;
 
-    struct glbSetFile *data; /* data on hard drive */
+    struct glbSetFile *data;    /* data on hard drive */
     struct glbIndexTree *index; /* data index */
 
     /* for active usage lists */
