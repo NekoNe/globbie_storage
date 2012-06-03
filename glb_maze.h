@@ -97,9 +97,9 @@ struct glbMaze
 
     struct ooDict *item_dict;
 
-    struct ooSet **search_set_pool;
+    struct glbSet **search_set_pool;
     size_t search_set_pool_size;
-    size_t max_set_pool_size;
+    size_t max_search_set_pool_size;
 
     /******** public methods ********/
     int (*init)(struct glbMaze *self);

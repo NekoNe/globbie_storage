@@ -111,15 +111,29 @@ void *glbStorage_add_agent(void *arg)
 
 	    printf("    ++  PARTITION AGENT #%d: task complete!\n", 
 		   args->agent_id);
+	    goto final;
 
 	}
 
 	if (strstr(data->spec, "FIND")) {
 
+	    printf("    ++  PARTITION AGENT #%d: FIND mode!\n", 
+		   args->agent_id);
+
+	    data->topics = s_recv(outbox, &data->topic_size);
+
+	    printf(" receive topics: %s\n", data->topics);
+
 	    data->interp = s_recv(outbox, &data->interp_size);
 
-	    printf("    ++  PARTITION AGENT #%d: FIND: %s\n", 
+	    printf("    ++  PARTITION AGENT #%d: INTERP: %s\n", 
 		   args->agent_id, data->interp);
+
+	    ret = maze->search(maze, 
+			       data);
+	    if (ret != glb_OK) goto final;
+
+
 
 	}
 
@@ -381,13 +395,15 @@ void *glbStorage_add_search_service(void *arg)
 
 	/* get the query */
         data->spec = s_recv(coll, &data->spec_size);
+        data->topics = s_recv(coll, &data->topic_size);
 	data->interp = s_recv(coll, &data->interp_size);
 
 	printf("    ++ STORAGE SEARCH SERVICE has got query:\n"
-               "       %s\n", data->query);
+               "       %s\n", data->interp);
 
         /* search query */
         s_sendmore(inbox, data->spec, data->spec_size);
+        s_sendmore(inbox, data->topics, data->topic_size);
         s_send(inbox, data->interp, data->interp_size);
 
     final:
