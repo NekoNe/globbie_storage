@@ -136,6 +136,8 @@ glbPartition_add(struct glbPartition *self,
     int i, ret;
     int fd;
 
+    printf("OK!\n");
+
     printf("    !! Storage Partition #%d activated!\n", self->id);
 
     if (self->num_objs + 1 >= self->max_num_objs) {
@@ -147,13 +149,14 @@ glbPartition_add(struct glbPartition *self,
     id_buf[GLB_ID_MATRIX_DEPTH] = '\0';
     inc_id(id_buf);
 
-    /*rec = malloc(sizeof(struct glbObjRecord));
-      if (!rec) return glb_NOMEM;*/
+    printf("CURR ID: %s\n", id_buf);
 
-    sprintf(curr_buf, "%s/part%d", self->path, self->id);
-    path_size = strlen(path_buf);
+    sprintf(curr_buf, "%s", self->path);
+    path_size = strlen(curr_buf);
     curr_buf += path_size;
 
+
+    /* treat each digit in the id as a folder */
     for (i = 0; i < GLB_ID_MATRIX_DEPTH; i++) {
 	*curr_buf =  '/';
 	curr_buf++;
@@ -214,11 +217,79 @@ glbPartition_add(struct glbPartition *self,
     return glb_OK;
 }
 
+
+static int
+glbPartition_read_config(struct glbPartition *self)
+{
+    char buf[GLB_TEMP_BUF_SIZE];
+    xmlDocPtr doc;
+    xmlNodePtr root, cur_node;
+    char *value;
+    int ret;
+
+    sprintf(buf, "%s/config.ini", self->path);
+
+    doc = xmlParseFile((const char*)buf);
+    if (!doc) {
+	fprintf(stderr, "Couldn't read \"%s\" :( \n", buf);
+	ret = -1;
+	goto error;
+    }
+
+    root = xmlDocGetRootElement(doc);
+    if (!root) {
+	fprintf(stderr,"empty document\n");
+	ret = -2;
+	goto error;
+    }
+
+    if (xmlStrcmp(root->name, (const xmlChar *) "partition")) {
+	fprintf(stderr,"Document of the wrong type: the root node " 
+		" must be \"partition\"");
+	ret = -3;
+	goto error;
+    }
+
+    for (cur_node = root->children; cur_node; cur_node = cur_node->next) {
+        if (cur_node->type != XML_ELEMENT_NODE) continue;
+
+	if ((!xmlStrcmp(cur_node->name, (const xmlChar *)"state"))) {
+	    value = (char *)xmlGetProp(cur_node,  (const xmlChar *)"curr_id");
+	    if (value) {
+		memcpy(self->curr_obj_id, value, GLB_ID_MATRIX_DEPTH);
+
+		xmlFree(value);
+	    }
+	}
+    }
+
+error:
+    xmlFreeDoc(doc);
+
+    return glb_OK;
+}
+
 static int
 glbPartition_init(struct glbPartition *self)
 {
-    self->del = glbPartition_del;
-    self->add = glbPartition_add;
+    char buf[GLB_TEMP_BUF_SIZE];
+    int ret;
+
+    if (!self->env_path) return glb_FAIL;
+
+    sprintf(buf, "%s/part%d", self->env_path, self->id);
+
+    self->path = strdup(buf);
+
+    ret = glb_mkpath(self->path, 0777);
+    if (ret != glb_OK) return ret;
+
+    printf(" .. Partition #%d: %s reading config...\n",
+	   self->id, self->path);
+
+    ret = glbPartition_read_config(self);
+
+    printf("  ++ curr_id: %s\n", self->curr_obj_id);
 
     return glb_OK;
 }
@@ -233,9 +304,6 @@ int glbPartition_new(struct glbPartition **rec)
     if (!self) return glb_NOMEM;
 
     memset(self, 0, sizeof(struct glbPartition));
-
-    self->path = strdup("storage");
-    if (!self->path) return glb_NOMEM;
 
     self->max_num_objs = GLB_RADIX_BASE;
     for (i = 0; i < GLB_ID_MATRIX_DEPTH - 1; i++) {
@@ -254,10 +322,13 @@ int glbPartition_new(struct glbPartition **rec)
 	glbPartition_del(self);
 	return glb_NOMEM;
     }
+
     memset(self->curr_obj_id, '0', GLB_ID_MATRIX_DEPTH);
     self->curr_obj_id[GLB_ID_MATRIX_DEPTH] = '\0';
 
-    glbPartition_init(self); 
+    self->del = glbPartition_del;
+    self->add = glbPartition_add;
+    self->init = glbPartition_init;
 
     *rec = self;
     return glb_OK;

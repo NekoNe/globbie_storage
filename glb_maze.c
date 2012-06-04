@@ -398,6 +398,32 @@ glbMaze_sort_items(struct glbMaze *self)
     return glb_OK;
 }
 
+
+
+static int 
+glbMaze_present_results(struct glbMaze *self, 
+			const char *ids,
+			size_t num_ids)
+{
+    char buf[GLB_ID_MATRIX_DEPTH + 1];
+    int i;
+
+    buf[GLB_ID_MATRIX_DEPTH] = '\0';
+
+    for (i = 0; i < num_ids; i++) {
+
+	memcpy(buf, 
+	       ids + i * GLB_ID_MATRIX_DEPTH, 
+	       GLB_ID_MATRIX_DEPTH);
+
+	printf("obj match: %s!\n", buf);
+
+    }
+
+    return glb_OK;
+}
+
+
 static int 
 glbMaze_add_search_term(struct glbMaze *self, 
 			const char *name)
@@ -426,28 +452,32 @@ glbMaze_add_search_term(struct glbMaze *self,
 
     ret = set->init(set,
 		    (const char*)self->path, 
-		    (const char*)name);
+		    name);
     if (ret != glb_OK) return ret;
 
     set->num_objs = item->num_objs;
+
     item->num_requests++;
 
     self->search_set_pool[self->search_set_pool_size] = set;
     self->search_set_pool_size++;
-  
+
     return glb_OK;
 }
+
 
 static int
 glbMaze_search(struct glbMaze *self, 
 	       struct glbData *data)
 {
+    char buf[GLB_ID_MATRIX_DEPTH + 1];
     xmlDocPtr doc;
     xmlNodePtr root, cur_node;
-    struct glbRequestHandler *request;
+    struct glbSet *set;
+    struct glbRequestHandler *request = NULL;
     char *value = NULL;
+
     int ret = glb_OK;
-    char buf[GLB_ID_MATRIX_DEPTH + 1];
     int i;
 
     if (DEBUG_MAZE_LEVEL_1)
@@ -498,7 +528,7 @@ glbMaze_search(struct glbMaze *self,
 	}
     }
 
-    printf("NUM SETS: %d\n", self->search_set_pool_size);
+    printf("  ++ NUM INTERSECTION SETS: %d\n", self->search_set_pool_size);
 
     if (self->search_set_pool_size == 0) return glb_NO_RESULTS;
 
@@ -507,6 +537,13 @@ glbMaze_search(struct glbMaze *self,
 	  self->search_set_pool_size, 
 	  sizeof(struct glbSet*), glbSet_cmp);
 
+    /*printf("  Sorted sets:\n");
+    for (i = 0; i < self->search_set_pool_size; i++) {
+	set = self->search_set_pool[i];
+	printf("  %d: %s\n", i, set->name);
+	}*/
+
+
     ret = glbRequestHandler_new(&request, 
 				GLB_RESULT_BATCH_SIZE,
 				0, 
@@ -514,19 +551,28 @@ glbMaze_search(struct glbMaze *self,
 				self->search_set_pool_size);
     if (ret != glb_OK) return ret;
 
-    printf("  intersection started...\n");
-
     request->intersect(request);
 
-    printf("NUM RESULTS: %d\n", request->result->answer_actual_size);
+    if (!request->result->answer_actual_size) {
+	ret = glb_NO_RESULTS;
+	goto error;
+    }
 
+
+    glbMaze_present_results(self, 
+			    request->result->ids,  
+			    request->result->answer_actual_size);
+
+    printf("NUM RESULTS: %d\n", request->result->answer_actual_size);
 
     /* for (i = 0; i <  request->result->answer_actual_size; i++) {
 	memcpy(buf, request->result->ids[GLB_ID_MATRIX_DEPTH * i], GLB_ID_MATRIX_DEPTH);
 	buf[GLB_ID_MATRIX_DEPTH] = '\0';
 	printf("%s\n", buf);
 	}*/
+
     request->result->ids[GLB_ID_MATRIX_DEPTH * request->result->answer_actual_size] = '\0';
+
     printf("%s\n", request->result->ids);
 
     /* для каждого id читаем его текст и индекс */
@@ -541,6 +587,9 @@ glbMaze_search(struct glbMaze *self,
 
     if (value)
 	xmlFree(value);
+
+    if (request)
+	request->del(request);
 
     xmlFreeDoc(doc);
 

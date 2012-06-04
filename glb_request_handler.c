@@ -149,34 +149,20 @@ glbRequestHandler_lookup(struct glbRequestHandler *self,
 {
     int left, right, res;
 
-    char buf[GLB_ID_MATRIX_DEPTH + 1];
-
-    memcpy(buf, id, GLB_ID_MATRIX_DEPTH);
-    buf[GLB_ID_MATRIX_DEPTH] = '\0';
-
-    printf(" id lookup: %s\n", buf);
-
     /* TODO: jumping over tree */ 
     if (!marker)  
         return glb_NO_RESULTS;
-
-    printf(" marker: %p\n", marker);
-
-    memcpy(buf, marker->id_last, GLB_ID_MATRIX_DEPTH);
-    buf[GLB_ID_MATRIX_DEPTH] = '\0';
-
-    printf(" marker id last: %s\n", buf);
 
     left = compare(marker->id, id);
 
     right = compare(marker->id_last, id);
 
-    printf(" left: %d right: %d\n", left, right);
-
-    if (((left == glb_LESS) || (left == glb_EQUALS)) && ((right == glb_MORE) || (left == glb_EQUALS))) {
+    if (((left == glb_LESS) || (left == glb_EQUALS)) &&\
+        ((right == glb_MORE) || (left == glb_EQUALS))) {
         *node = marker;
         return glb_OK;
     }
+
     if (left == glb_MORE) {
         return self->lookup(self, marker->left, id, node);
     }
@@ -331,22 +317,16 @@ begin:
         }
     }
 
-    printf("   ++ next id: %s\n", self->id);
+    /*printf("   ++ next id: %s\n", self->id);*/
 
 
     /* II. id search */
     for (i = 1; i < self->set_pool_size; i++) {
 
-	printf("  lookup set %d id: %s\n", i, self->id);
-
         res = self->lookup(self, self->set_pool[i]->index->root, self->id, &tmp);
-
-	printf(" ret: %d tmp node: %p\n", res, tmp);
 
         if (res == glb_NO_RESULTS) goto begin;
         self->cur_nodes[i] = tmp;
-
-	printf("OK!\n");
 
     }
 

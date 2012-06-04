@@ -92,18 +92,12 @@ glbSet_init(struct glbSet *self,
     ret = self->data->init(self->data, path, name);
     if (ret != glb_OK) return ret;
 
-    printf("   set index init ...\n");
-
     ret = self->index->init(self->index);
     if (ret != glb_OK) return ret;
-
-    printf("  set index read...\n");
 
     /* load existing index file */
     ret = self->data->read(self->data, self->index);
     if (ret != glb_OK) return ret;
-
-    self->lookup(self, "002");
 
     return glb_OK;
 }
