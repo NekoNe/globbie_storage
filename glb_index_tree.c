@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "glb_config.h"
 #include "glb_index_tree.h"
@@ -55,7 +56,8 @@ glbIndexTree_rotate_root(struct glbIndexTree *self, struct glbIndexTreeNode *tmp
 }
 
 static int
-glbIndexTree_update(struct glbIndexTree *self, struct glbIndexTreeNode *tmp)
+glbIndexTree_update(struct glbIndexTree *self, 
+		    struct glbIndexTreeNode *tmp)
 {
     size_t difference;
     int result;
@@ -124,15 +126,18 @@ glbIndexTree_addElem(struct glbIndexTree *self,
         cur = cur->right;
     }
 
+    /* TODO: alloc new index node */
     cur = self->last++;
-    cur->id = id;
-    cur->id_last = NULL;
-    cur->right = NULL;
-    cur->left = NULL;
+
+    memset(cur, 0, sizeof(struct glbIndexTreeNode));
+    memcpy(cur->id, id, GLB_ID_MATRIX_DEPTH);
+
     cur->offset = offset;
     cur->parent = last; /* set parent */
+
     if (last) last->right = cur;
     self->node_count++;
+
     if (!self->root) self->root = cur;
     return glb_OK;
 }
@@ -154,6 +159,7 @@ static int
 glbIndexTree_init(struct glbIndexTree *self)
 {
     self->last = self->array;
+
     self->array_offset = 0;
     self->root = NULL;
      
@@ -176,6 +182,7 @@ glbIndexTree_init(struct glbIndexTree *self)
 int glbIndexTree_new(struct glbIndexTree **rec)
 {
     struct glbIndexTree *self;
+    size_t array_size;
     size_t i;
     int result;
     
@@ -184,24 +191,18 @@ int glbIndexTree_new(struct glbIndexTree **rec)
     self = malloc(sizeof(glbIndexTree));
     if (!self) return glb_NOMEM;
 
-    self->array = NULL;
+    array_size = GLB_INDEX_ID_BATCH_SIZE *\
+	sizeof(struct glbIndexTreeNode);
 
-    self->array = malloc((GLB_ID_MAX_COUNT / GLB_LEAF_SIZE) *\
-			 sizeof(struct glbIndexTreeNode));
+    self->array = malloc(array_size);
     if (!self->array) goto error;
 
-    for (i = 0; i < GLB_ID_MAX_COUNT / GLB_LEAF_SIZE; i++) {
-        self->array[i].left = NULL;
-        self->array[i].right = NULL;
-        self->array[i].parent = NULL;
-        self->array[i].id = NULL;
-        self->array[i].id_last = NULL;
-        self->array[i].offset = 0;
-    }
+    self->num_ids = GLB_INDEX_ID_BATCH_SIZE;
 
     result = glbIndexTree_init(self);
+    if (result != glb_OK) goto error;
+
     *rec = self;
-    if (result) goto error;
 
     return glb_OK;
 

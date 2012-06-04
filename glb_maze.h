@@ -65,7 +65,8 @@ struct glbMazeItem
     const char *set_path;
 
     size_t num_objs;
-    size_t weight;
+
+    size_t num_requests;
 
     struct glbMazeItem *next;
 };
@@ -77,6 +78,8 @@ struct glbMaze
     char *path;
     size_t path_size;
 
+    struct ooDict *item_dict;
+
     struct glbMazeItem *item_storage;
     struct glbMazeItem **item_index;
     size_t num_items;
@@ -87,19 +90,20 @@ struct glbMaze
     size_t num_specs;
     size_t spec_storage_size;
 
-    struct glbSet **cache_set_storage;
-    size_t num_cache_sets;
+    /* set cache */
+    struct glbSet *head;
+    struct glbSet *tail;
     size_t cache_set_storage_size;
 
     struct glbSet **agent_set_storage;
     size_t num_agent_sets;
     size_t agent_set_storage_size;
 
-    struct ooDict *item_dict;
 
     struct glbSet **search_set_pool;
     size_t search_set_pool_size;
     size_t max_search_set_pool_size;
+
 
     /******** public methods ********/
     int (*init)(struct glbMaze *self);

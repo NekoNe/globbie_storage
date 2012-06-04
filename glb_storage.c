@@ -240,52 +240,62 @@ int glbStorage_new(struct glbStorage **rec,
 		   const char *config)
 {
     struct glbStorage *self;
+    struct glbPartition *part;
     struct ooDict *dict, *storage;
     char buf[GLB_TEMP_BUF_SIZE];
     char *path;
-    int i, ret;
+    int i, ret = glb_OK;
     
     self = malloc(sizeof(struct glbStorage));
     if (!self) return glb_NOMEM;
 
     memset(self, 0, sizeof(struct glbStorage));
 
+    /* TODO: read path from config */
+    self->path = strdup("storage");
+
     ret = ooDict_new(&self->obj_index, GLB_LARGE_DICT_SIZE);
-    if (ret != oo_OK) return ret;
+    if (ret != oo_OK) goto error;
 
     self->partitions = malloc(sizeof(struct glbPartition*) * GLB_NUM_AGENTS);
     if (!self->partitions) {
-        glbStorage_del(self);
-        return glb_NOMEM;
+        ret = glb_NOMEM;
+	goto error;
     }
 
     self->mazes = malloc(sizeof(struct glbMaze*) * GLB_NUM_AGENTS);
     if (!self->mazes) {
-        glbStorage_del(self);
-        return glb_NOMEM;
+        ret = glb_NOMEM;
+	goto error;
     }
 
     for (i = 0; i < GLB_NUM_AGENTS; i++) {
-	ret = glbPartition_new(&self->partitions[i]);
-	if (ret) {
-	    glbStorage_del(self);
-	    return ret;
-	}
-	self->partitions[i]->id = i;
-	    
 
+	/* partition */
+	ret = glbPartition_new(&part);
+	if (ret) goto error;
+
+	part->id = i;
+	part->env_path = self->path;
+
+	ret = part->init(part);
+	if (ret != glb_OK) goto error;
+
+	self->partitions[i] = part;
+
+
+	/* maze */
 	ret = glbMaze_new(&self->mazes[i]);
-	if (ret) {
-	    glbStorage_del(self);
-	    return ret;
-	}
+	if (ret) goto error;
 
 	self->mazes[i]->id = i;
 
 	sprintf(buf, "maze%d", i);
 	path = strdup(buf);
-	if (!path) return glb_NOMEM;
-
+	if (!path) {
+	    ret = glb_NOMEM;
+	    goto error;
+	}
 	self->mazes[i]->path = path;
 	self->mazes[i]->path_size = strlen(path);
 
@@ -299,4 +309,10 @@ int glbStorage_new(struct glbStorage **rec,
     *rec = self;
 
     return glb_OK;
+
+ error:
+
+    glbStorage_del(self);
+
+    return ret;
 }

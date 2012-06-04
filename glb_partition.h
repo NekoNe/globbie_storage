@@ -13,6 +13,7 @@ struct glbObjRecord
 struct glbPartition
 {
     int id;
+    char *env_path;
     char *path;
 
     char *service_address;
@@ -27,7 +28,10 @@ struct glbPartition
 
     /**********  interface methods  **********/
     int (*del)(struct glbPartition *self);
+
     int (*str)(struct glbPartition *self);
+
+    int (*init)(struct glbPartition *self);
 
     int (*update)(struct glbPartition *self);
    

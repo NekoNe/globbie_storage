@@ -86,6 +86,8 @@ void *glbStorage_add_agent(void *arg)
 	    printf("    ++ PARTITION AGENT #%d has got spec \"%s\"\n", 
 		   args->agent_id, data->spec);
 
+	    printf("\nadding obj....\n\n");
+
 	    ret = partition->add(partition, 
 				 data);
 	    if (ret != glb_OK) goto final;

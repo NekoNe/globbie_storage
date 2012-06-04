@@ -1,7 +1,7 @@
 #ifndef GLB_STORAGE_H
 #define GLB_STORAGE_H
 
-#define GLB_NUM_AGENTS 2
+#define GLB_NUM_AGENTS 1
 
 struct agent_args {
     int agent_id;
