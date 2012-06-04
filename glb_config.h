@@ -79,11 +79,13 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 #define GLB_COLLECTION_DEBUG_LEVEL_2 1
 
 #define GLB_ID_MATRIX_DEPTH 3
-#define MAX_MATRIX_SIZE 255 * 255 * 255 * 8 
+
 
 #define GLB_NAME_LENGTH 50
 
 #define GLB_TREE_OFFSET_SIZE 2
+
+#define GLB_INDEX_ID_BATCH_SIZE 100
 
 #define SPACE_CHAR 32
 
@@ -95,9 +97,12 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 
 #define GLB_LEAF_SIZE 10
 
+/* number of leafs to read from index at once */
+#define GLB_LEAF_CHUNK_SIZE 100
+
 #define GLB_SIZE_OF_OFFSET sizeof(size_t)
 
-#define GLB_ID_BLOCK_SIZE (GLB_ID_MATRIX_DEPTH + sizeof(size_t))
+#define GLB_ID_BLOCK_SIZE (GLB_ID_MATRIX_DEPTH * sizeof(char))
 
 /* alphanumeric symbols:
    0-9, A-Z, a-z */

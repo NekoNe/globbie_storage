@@ -6,6 +6,9 @@
 
 #include "glb_config.h"
 
+
+struct glbIndexTree;
+
 typedef struct glbSetFile
 {
     const char *path;
@@ -39,6 +42,10 @@ typedef struct glbSetFile
 
     /* appending id  */
     int (*add)(struct glbSetFile *self, const char *id, size_t *offset);
+
+    /* read index from file  */
+    int (*read)(struct glbSetFile *self, 
+		struct glbIndexTree *index);
 
 } glbSetFile;
 

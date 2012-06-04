@@ -14,7 +14,8 @@
 #define GLB_DEBUG_SET_LEVEL_4 1
 
 static int 
-glbSet_lookup(struct glbSet *self, const char *id)
+glbSet_lookup(struct glbSet *self, 
+	      const char *id)
 {
     size_t offset;
     int ret;
@@ -58,6 +59,7 @@ glbSet_add(struct glbSet *self, const char *id)
         ret = self->index->update(self->index, self->index->root);
         self->num_objs = 0;
     }
+
     self->index->array[self->index->node_count - 1].id_last = id;
 
     self->num_objs++;
@@ -88,6 +90,13 @@ glbSet_init(struct glbSet *self,
     self->name = name;
 
     ret = self->data->init(self->data, path, name);
+    if (ret != glb_OK) return ret;
+
+    ret = self->index->init(self->index);
+    if (ret != glb_OK) return ret;
+
+    /* load existing index file */
+    ret = self->data->read(self->data, self->index);
     if (ret != glb_OK) return ret;
 
     return glb_OK;

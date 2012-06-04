@@ -4,23 +4,25 @@
 #include "glb_config.h"
 #include "glb_utils.h"
 
-typedef struct glbIndexTreeNode
+struct glbIndexTreeNode
 {
     struct glbIndexTreeNode *left;
     struct glbIndexTreeNode *right;
     struct glbIndexTreeNode *parent;
 
-    const char *id;
+    char id[GLB_ID_MATRIX_DEPTH];
     size_t offset;
     const char *id_last;    
-    
-} glbIndexTreeNode;
+};
+
 
 typedef struct glbIndexTree
 {
     size_t node_count;
     size_t max_height; /* height of binary tree */
     size_t array_offset;
+
+    size_t num_ids;
 
     struct glbIndexTreeNode *array;
     struct glbIndexTreeNode *root;
