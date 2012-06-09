@@ -28,9 +28,10 @@ struct glbSet
 
     int (*init)(struct glbSet *self, 
 		const char *path,
-		const char *name);
+		const char *name,
+		size_t name_size);
 
-    int (*del)(struct glbSet *self); /* destructor */
+    int (*del)(struct glbSet *self);
 
     /* add id to this set. bytecode contains locset */
     int (*add)(struct glbSet *self, const char *id);

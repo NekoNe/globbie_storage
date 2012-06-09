@@ -22,7 +22,10 @@
 #define GLB_CONFIG_H
 
 /* return error codes */
-enum { glb_OK, glb_FAIL, glb_NOMEM, glb_NO_RESULTS, glb_IO_FAIL, glb_EOB, glb_STOP} glb_err_codes;
+enum { glb_OK, glb_FAIL, glb_NOMEM, glb_NO_RESULTS, 
+       glb_IO_FAIL, glb_EOB, glb_STOP, glb_NEED_WAIT } 
+  glb_err_codes;
+
 /* element status in the tree of changes */
 enum { glb_PRESENCE, glb_DELETED, glb_IRRELEVANT, glb_IDXT_NTD, glb_IDXT_NEED_ROTATE } glb_tree_status_codes;
 /* comparison codes */
@@ -83,13 +86,18 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 
 #define GLB_NAME_LENGTH 50
 
+/* default numeric base */
+#define GLB_NUM_ENCODE_BASE 10
+
+#define GLB_CONC_PREFIX_NUM_DIGITS 3
+#define GLB_CONC_PREFIX_DIGIT_SIZE 2
+#define GLB_CONC_PREFIX_SIZE  GLB_CONC_PREFIX_NUM_DIGITS *  GLB_CONC_PREFIX_DIGIT_SIZE
+
 #define GLB_TREE_OFFSET_SIZE 2
 
 #define GLB_INDEX_ID_BATCH_SIZE 100
 
 #define SPACE_CHAR 32
-
-#define TMP_ID_BUF_SIZE 256
 
 #define GLB_LOCSET_MAX_ENUM_VALUE 64
 
@@ -123,11 +131,36 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 #define GLB_MAZE_LOC_STORAGE_SIZE 1024 * 1024
 
 
-#define GLB_MAZE_AGENT_SET_STORAGE_SIZE 10
-#define GLB_MAZE_CACHE_SET_STORAGE_SIZE 1000
+#define GLB_MAZE_NUM_AGENTS 10
+#define GLB_MAZE_NUM_CACHE_SETS 1000
 
 #define GLB_MAZE_MAX_DEPTH 3
 
 #define GLB_TEMP_BUF_SIZE 1024
+#define GLB_TEMP_SMALL_BUF_SIZE 64
+
+#define GLB_RESULT_BUF_SIZE 1024 * 10 * sizeof(char)
+
+#define GLB_LOC_REC_SIZE (sizeof(long) + sizeof(long))
+
+#define GLB_MAX_CONC_UNITS 10000
+
+#define GLB_LOCSET_BUF_SIZE GLB_MAX_CONC_UNITS * GLB_LOC_REC_SIZE
+
+#define GLB_MAX_TEXT_BUF_SIZE 1024 * 1024
+
+#define GLB_MAX_CONTEXTS 3
+
+#define GLB_MAX_RESULT_SIZE 1000
+#define GLB_CONTEXT_RADIUS 100
+
+#define PARAGRAPH_BEGIN "<span>"
+#define PARAGRAPH_END "</span>"
+
+#define HIGHLIGHT_BEGIN "<b>"
+#define HIGHLIGHT_END "</b>"
+
+#define SPACE ".."
+
 
 #endif

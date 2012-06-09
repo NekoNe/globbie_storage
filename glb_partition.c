@@ -124,6 +124,23 @@ error:
 }
 
 static int
+glbPartition_update_config(struct glbPartition *self)
+{
+    char buf[GLB_TEMP_BUF_SIZE];
+    int ret;
+
+    buf[0] = '\0';
+    sprintf(buf, "<partition>\n<state curr_id=\"%s\"/>\n</partition>",
+	self->curr_obj_id);
+
+    ret = glb_write_file((const char*)self->path, 
+			 "config.ini", buf, strlen(buf));
+
+    return glb_OK;
+}
+
+
+static int
 glbPartition_add(struct glbPartition *self,
 		 struct glbData *data)
 {
@@ -136,8 +153,6 @@ glbPartition_add(struct glbPartition *self,
     int i, ret;
     int fd;
 
-    printf("OK!\n");
-
     printf("    !! Storage Partition #%d activated!\n", self->id);
 
     if (self->num_objs + 1 >= self->max_num_objs) {
@@ -149,7 +164,9 @@ glbPartition_add(struct glbPartition *self,
     id_buf[GLB_ID_MATRIX_DEPTH] = '\0';
     inc_id(id_buf);
 
-    printf("CURR ID: %s\n", id_buf);
+    printf("    == CURR OBJ ID: %s\n", id_buf);
+
+    curr_buf[0] = '\0';
 
     sprintf(curr_buf, "%s", self->path);
     path_size = strlen(curr_buf);
@@ -177,6 +194,7 @@ glbPartition_add(struct glbPartition *self,
 		   "meta", data->spec, data->spec_size);
 
     /* write textual content */
+    /*glb_remove_nonprintables(path_buf);*/
     glb_write_file((const char*)path_buf, 
 		   "text", data->text, data->text_size);
 
@@ -200,6 +218,8 @@ glbPartition_add(struct glbPartition *self,
 
     memcpy(self->curr_obj_id, id_buf, GLB_ID_MATRIX_DEPTH);
     self->num_objs++;
+
+    glbPartition_update_config(self);
 
     data->local_id = strdup(self->curr_obj_id);
     data->local_id_size = GLB_ID_MATRIX_DEPTH;
@@ -227,11 +247,13 @@ glbPartition_read_config(struct glbPartition *self)
     char *value;
     int ret;
 
+    buf[0] = '\0';
     sprintf(buf, "%s/config.ini", self->path);
 
     doc = xmlParseFile((const char*)buf);
     if (!doc) {
-	fprintf(stderr, "Couldn't read \"%s\" :( \n", buf);
+	fprintf(stderr, "\n    -- No prior config file found."
+                        " Fresh start!\n", buf);
 	ret = -1;
 	goto error;
     }
@@ -277,6 +299,7 @@ glbPartition_init(struct glbPartition *self)
 
     if (!self->env_path) return glb_FAIL;
 
+    buf[0] = '\0';
     sprintf(buf, "%s/part%d", self->env_path, self->id);
 
     self->path = strdup(buf);
@@ -284,12 +307,12 @@ glbPartition_init(struct glbPartition *self)
     ret = glb_mkpath(self->path, 0777);
     if (ret != glb_OK) return ret;
 
-    printf(" .. Partition #%d: %s reading config...\n",
+    printf("    .. Partition #%d: %s reading config...\n",
 	   self->id, self->path);
 
     ret = glbPartition_read_config(self);
 
-    printf("  ++ curr_id: %s\n", self->curr_obj_id);
+    printf("    !! curr_id: %s\n", self->curr_obj_id);
 
     return glb_OK;
 }

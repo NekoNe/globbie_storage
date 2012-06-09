@@ -8,10 +8,10 @@
 #include "glb_set_file.h"
 #include "glb_index_tree.h"
 
-#define GLB_DEBUG_SET_LEVEL_1 1
-#define GLB_DEBUG_SET_LEVEL_2 1
-#define GLB_DEBUG_SET_LEVEL_3 1
-#define GLB_DEBUG_SET_LEVEL_4 1
+#define GLB_DEBUG_SET_LEVEL_1 0
+#define GLB_DEBUG_SET_LEVEL_2 0
+#define GLB_DEBUG_SET_LEVEL_3 0
+#define GLB_DEBUG_SET_LEVEL_4 0
 
 static int 
 glbSet_lookup(struct glbSet *self, 
@@ -83,13 +83,16 @@ glbSet_del(struct glbSet *self)
 static int
 glbSet_init(struct glbSet *self, 
 	    const char *path,
-	    const char *name)
+	    const char *name,
+	    size_t name_size)
 {
     int ret;
+
     self->path = path;
     self->name = name;
+    self->name_size = name_size;
 
-    ret = self->data->init(self->data, path, name);
+    ret = self->data->init(self->data, path, name, name_size);
     if (ret != glb_OK) return ret;
 
     ret = self->index->init(self->index);
