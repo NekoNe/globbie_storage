@@ -5,7 +5,11 @@
 #include <string.h>
 
 
+/* numeric conversion by strtol */
 #include <errno.h>
+#include <limits.h>
+ 
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -124,6 +128,60 @@ int glb_write_file(const char *path, const char *filename,
 }
 
 
+extern int 
+glb_get_conc_prefix(const char *name,
+		    size_t name_size,
+			char *prefix)
+{
+    char *buf;
+    int digit_size = GLB_CONC_PREFIX_DIGIT_SIZE;
+    int pref_size;
+    int i = 0;
+
+    if (!name_size) return glb_FAIL;
+
+    for (i = 0; i <= GLB_CONC_PREFIX_SIZE; i += digit_size){
+	memcpy(prefix, name, i);
+	if (i > name_size) break;
+    }
+
+    prefix[i - digit_size] = '\0';
+
+    return glb_OK;
+}
+
+
+int glb_make_id_path(char *buf,
+		     const char *path,
+		     const char *id, 
+		     const char *filename)
+{
+    char *curr_buf = buf;
+    size_t path_size;
+    int i;
+
+    sprintf(curr_buf, "%s", path);
+
+    path_size = strlen(curr_buf);
+    curr_buf += path_size;
+
+    /* treat each digit in the id as a folder */
+    for (i = 0; i < GLB_ID_MATRIX_DEPTH; i++) {
+	*curr_buf =  '/';
+	curr_buf++;
+	*curr_buf = id[i];
+	curr_buf++;
+    }
+
+    if (filename) {
+	sprintf(curr_buf, "/%s", filename);
+    }
+
+    return glb_OK;
+}
+
+
+
 /**
  * read XML attr value, allocate memory and copy 
  */
@@ -162,6 +220,71 @@ glb_copy_xmlattr(xmlNode    *input_node,
 }
 
 
+/**
+ * read XML attr numeric value
+ */
+extern int
+glb_get_xmlattr_num(xmlNode *input_node,
+		    const char *attr_name,
+		    long *result)
+{
+    char *val;
+    long numval;
+    char *invalid_num_char = NULL;
+    int ret = glb_OK;
+
+    val = (char*)xmlGetProp(input_node,  (const xmlChar *)attr_name);
+    if (!val) return glb_FAIL;
+	    
+    errno = 0;
+    numval = strtol((const char*)val, &invalid_num_char, GLB_NUM_ENCODE_BASE);
+    
+    /* check for various numeric decoding errors */
+    if ((errno == ERANGE && (numval == LONG_MAX || numval == LONG_MIN))
+	|| (errno != 0 && numval == 0)) {
+	perror("strtol");
+	ret = glb_FAIL;
+	goto final;
+    }
+    
+    if (invalid_num_char == val) {
+	fprintf(stderr, "  -- No digits were found in \"%s\"\n", val);
+	ret = glb_FAIL;
+	goto final;
+    }
+    
+    *result = numval;
+
+final:
+    if (val)
+	xmlFree(val);
+   
+    return ret;
+}
+
+
+
+extern int 
+glb_remove_nonprintables(char *data)
+{
+    unsigned char *c;
+    c = (unsigned char*)data;
+
+    while (*c) {
+	if (*c < 32) {
+	    *c = ' ';
+	}
+	if (*c == '\"') *c = ' ';
+	if (*c == '\'') *c = ' ';
+	if (*c == '&') *c = ' ';
+	if (*c == '\\') *c = ' '; 
+	c++;
+    }
+
+    return glb_OK;
+}
+
+
 static int
 glbData_del(struct glbData *self)
 {
@@ -176,6 +299,7 @@ glbData_reset(struct glbData *self)
 {
 
     if (self->id) free(self->id);
+    if (self->ticket) free(self->ticket);
     if (self->local_id) free(self->local_id);
     if (self->local_path) free(self->local_path);
 
@@ -192,6 +316,7 @@ glbData_reset(struct glbData *self)
     if (self->reply) free(self->reply);
 
     if (self->metadata) free(self->metadata);
+    if (self->results) free(self->results);
 
     if (self->control_msg) free(self->control_msg);
 

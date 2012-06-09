@@ -176,7 +176,8 @@ glbRequestHandler_leaf_intersection(struct glbRequestHandler *self)
     size_t i, j, k, l, m;
     size_t res_table_cursor, swap_cursor;
     size_t locset;
-    int res, comp_res;
+    size_t res;
+    int comp_res;
     struct glbIntersectionTable *tmp;
 
 

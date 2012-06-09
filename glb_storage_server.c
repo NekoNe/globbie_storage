@@ -34,6 +34,7 @@ void *glbStorage_add_agent(void *arg)
     char buf[GLB_TEMP_BUF_SIZE];
 
     const char *obj_id;
+    const char *ticket;
     int ret;
 
     ret = glbData_new(&data);
@@ -86,13 +87,11 @@ void *glbStorage_add_agent(void *arg)
 	    printf("    ++ PARTITION AGENT #%d has got spec \"%s\"\n", 
 		   args->agent_id, data->spec);
 
-	    printf("\nadding obj....\n\n");
-
 	    ret = partition->add(partition, 
 				 data);
 	    if (ret != glb_OK) goto final;
 
-	    printf("   new obj added: %s\n", 
+	    printf("    ++ obj saved with local id: %s\n", 
 		   data->local_id);
 
 	    ret = maze->update(maze, 
@@ -101,14 +100,16 @@ void *glbStorage_add_agent(void *arg)
 
 	    /* notify register */
 
-	    sprintf(buf, "<spec action=\"add\" "
+	    sprintf(buf, "<spec action=\"add_meta\" "
                          " obj_id=\"%s\""
                          " topics=\"%s\"/>\n",
 		    data->id, data->metadata);
 
-	    puts("    Notifying the Storage Registration Service...\n");
+	    puts("    !! notifying the Storage Registration Service...\n");
 
-	    s_send(reg, buf, strlen(buf));
+	    s_sendmore(reg, buf, strlen(buf));
+	    s_send(reg, "<noobj/>", strlen("<noobj/>"));
+
 	    confirm = s_recv(reg, &confirm_size);
 
 	    printf("    ++  PARTITION AGENT #%d: task complete!\n", 
@@ -119,22 +120,46 @@ void *glbStorage_add_agent(void *arg)
 
 	if (strstr(data->spec, "FIND")) {
 
-	    printf("    ++  PARTITION AGENT #%d: FIND mode!\n", 
-		   args->agent_id);
+	    printf("    ++  PARTITION AGENT #%d: got spec %s\n", 
+		   args->agent_id, data->spec);
 
 	    data->topics = s_recv(outbox, &data->topic_size);
-
-	    printf(" receive topics: %s\n", data->topics);
 
 	    data->interp = s_recv(outbox, &data->interp_size);
 
 	    printf("    ++  PARTITION AGENT #%d: INTERP: %s\n", 
 		   args->agent_id, data->interp);
 
+	    ticket = strstr(data->spec, " ");
+	    ticket++;
+	    data->ticket = strdup(ticket); 
+	    if (!data->ticket) goto final;
+	    
 	    ret = maze->search(maze, 
 			       data);
-	    if (ret != glb_OK) goto final;
+	    if (ret != glb_OK) {
+		/* no results */
+		sprintf(maze->results, 
+			 "<div class=\\\"msg_row\\\">"
+                         "<div class=\\\"msg_row_title\\\">"
+                         " К сожалению, по данному запросу ничего не найдено.</div></div>");
+	    }
 
+	    buf[0] = '\0';
+	    /* save result in register */
+	    sprintf(buf, "<spec action=\"add_search_results\" "
+		    " ticket=\"%s\"/>\n",
+		    data->ticket);
+
+	    puts("    !! notifying the Storage Registration Service...\n");
+
+	    s_sendmore(reg, buf, strlen(buf));
+	    s_send(reg, maze->results, strlen(maze->results));
+
+	    confirm = s_recv(reg, &confirm_size);
+
+	    printf("    ++  PARTITION AGENT #%d: task complete!\n", 
+		   args->agent_id);
 
 
 	}
@@ -273,11 +298,23 @@ void *glbStorage_add_registration(void *arg)
 	printf("\n    ++ STORAGE REGISTRATION is waiting for new tasks...\n");
 
         data->spec = s_recv(reg, &data->spec_size);
+        data->results = s_recv(reg, &data->result_size);
 
 	printf("    ++ STORAGE REGISTRATION has got spec:\n"
                "       %s\n", data->spec);
 
 	ret = storage->process(storage, data);
+
+	if (ret == glb_NEED_WAIT) {
+	    printf("   Please wait for results (ticket: %s)\n", 
+		   data->ticket);
+	    err_msg = "{\"wait\": \"1\"}";
+	    err_msg_size = strlen(err_msg);
+	    s_send(reg, err_msg, err_msg_size);
+	    goto final;
+	}
+
+	printf("   Registry REPLY: %s\n", data->reply);
 
 	/* notify controller */
 	if (data->control_msg) {
@@ -294,6 +331,7 @@ void *glbStorage_add_registration(void *arg)
 	    s_send(reg, err_msg, err_msg_size);
 	}
 
+    final:
 
         fflush(stdout);
     }
@@ -336,19 +374,19 @@ void *glbStorage_add_metadata_service(void *arg)
 
 	data->reset(data);
 
-	printf("\n    ++ STORAGE METADATA SERVICE is waiting for new tasks...\n");
+	printf("\n    ++ STORAGE CACHE SERVICE is waiting for new tasks...\n");
 
 	/* get the query */
         data->query = s_recv(coll, &data->query_size);
 
-	printf("    ++ STORAGE METADATA SERVICE has got query:\n"
+	printf("    ++ STORAGE CACHE SERVICE has got query:\n"
                "       %s\n", data->query);
 
         /* metadata query */
 	/* check the registration */
         s_send(reg, data->query, data->query_size);
-        data->reply = s_recv(reg, &data->reply_size);
 
+        data->reply = s_recv(reg, &data->reply_size);
 
 	s_send(coll, data->reply, data->reply_size);
 
