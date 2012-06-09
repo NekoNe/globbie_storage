@@ -78,6 +78,8 @@ struct glbMaze
     char *path;
     size_t path_size;
 
+    const char *storage_path;
+
     struct ooDict *item_dict;
 
     struct glbMazeItem *item_storage;
@@ -90,15 +92,28 @@ struct glbMaze
     size_t num_specs;
     size_t spec_storage_size;
 
-    /* set cache */
+    /* original text buffer */
+    char *text;
+    size_t text_size;
+
+    /* results buf */
+    char *results;
+    char *curr_results_buf;
+    size_t results_size;
+
+    /* agent locsets */
+    size_t **locsets;
+    size_t *num_locs;
+    size_t *result_ranges;
+
+    struct glbSet **agent_set_storage;
+    size_t num_agents;
+    size_t max_agents;
+
+   /* set cache */
     struct glbSet *head;
     struct glbSet *tail;
     size_t cache_set_storage_size;
-
-    struct glbSet **agent_set_storage;
-    size_t num_agent_sets;
-    size_t agent_set_storage_size;
-
 
     struct glbSet **search_set_pool;
     size_t search_set_pool_size;
@@ -110,16 +125,10 @@ struct glbMaze
     int (*del)(struct glbMaze *self);
     const char* (*str)(struct glbMaze *self);
 
-    int (*add)(struct glbMaze *self,
-	       struct glbMazeSpec *topic,
-	       xmlNodePtr input_node,
-	       const char *name,
-	       const char *obj_id);
-
-    int (*sort)(struct glbMaze *self);
-
     int (*update)(struct glbMaze *self,
 		  struct glbData *data);
+
+    int (*sort)(struct glbMaze *self);
 
     int (*search)(struct glbMaze *self,
 		  struct glbData *data);

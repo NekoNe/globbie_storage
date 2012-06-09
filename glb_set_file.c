@@ -11,8 +11,8 @@
 
 #define GLB_DEBUG_SETFILE_LEVEL_1 1
 #define GLB_DEBUG_SETFILE_LEVEL_2 1
-#define GLB_DEBUG_SETFILE_LEVEL_3 1
-#define GLB_DEBUG_SETFILE_LEVEL_4 1
+#define GLB_DEBUG_SETFILE_LEVEL_3 0
+#define GLB_DEBUG_SETFILE_LEVEL_4 0
 
 static int
 glbSetFile_open_file(struct glbSetFile *self)
@@ -55,8 +55,9 @@ glbSetFile_read_buf(struct glbSetFile *self,
     int fd;
     size_t res;
 
-    printf("  ..read buf of size %d from file \"%s\", offset %d, \n", 
-	   size, self->filename, offset);
+    if (GLB_DEBUG_SETFILE_LEVEL_3)
+	printf("  ..read buf of size %d from file \"%s\" [offset: %d]\n", 
+	       size, self->filename, offset);
 
     fd = open(self->filename, O_RDONLY);
     if (fd < 0) {
@@ -67,7 +68,8 @@ glbSetFile_read_buf(struct glbSetFile *self,
     lseek(fd, offset, SEEK_SET);
     res = read(fd, buffer, size);
     
-    printf("   ++ actual read: %d\n", res);
+    if (GLB_DEBUG_SETFILE_LEVEL_3)
+	printf("   ++ actual read: %d\n", res);
 
     *result = res; 
     
@@ -133,8 +135,9 @@ glbSetFile_add(struct glbSetFile *self,
     struct stat file_info;
     int rec;
     int fd;
-    
-    printf("write to file \"%s\"...\n", self->filename);
+
+    if (GLB_DEBUG_SETFILE_LEVEL_3) 
+	printf("write to file \"%s\"...\n", self->filename);
 
     fd = open(self->filename, O_WRONLY | O_APPEND | O_CREAT, 0644);
     if (fd < 0) return glb_IO_FAIL;
@@ -165,8 +168,6 @@ glbSetFile_read_index(struct glbSetFile *self,
     int ret = glb_OK;
     struct glbIndexTreeNode *node;
 
-    printf("\n   batch read size: %d buf...\n", buf_size);
-
     fd = open(self->filename, O_RDONLY);
     if (fd < 0) {
         close(fd);
@@ -178,7 +179,8 @@ glbSetFile_read_index(struct glbSetFile *self,
 
 	memcpy(id, buf, GLB_ID_MATRIX_DEPTH);
 
-	printf("\n   ++ actual batch read: %d bytes from %s...\n", res, self->filename);
+	/* printf("\n   ++ actual batch read: %d bytes from %s...\n", 
+	   res, self->filename); */
 
 	ret = index->addElem(index, (const char*)id, offset);
 	if (ret != glb_OK) goto error;
@@ -214,29 +216,35 @@ glbSetFile_del(struct glbSetFile *self)
 
 static int
 glbSetFile_init(struct glbSetFile *self, 
-		const char *path, 
-		const char *name)
+		const char *env_path, 
+		const char *name,
+		size_t name_size)
 {
+    char prefix[GLB_TEMP_SMALL_BUF_SIZE];
     char buf[GLB_TEMP_BUF_SIZE];
     int ret;
 
-    printf("set file init...\n");
-
-    self->path = path;
+    self->path = env_path;
     self->name = name;
 
     if (self->filename)
 	free(self->filename);
 
-    ret = glb_mkpath(path, 0777);
+    glb_get_conc_prefix(name, name_size, prefix);
+
+    sprintf(buf, "%s/%s/",
+	    env_path, prefix); 
+
+    ret = glb_mkpath(buf, 0777);
     if (ret != glb_OK) return ret;
 
-    sprintf(buf, "%s/%s.set", path, name);
+    sprintf(buf, "%s/%s/%s.set", 
+	    env_path, prefix, name); 
 
     self->filename = strdup(buf);
     if (!self->filename) return glb_NOMEM;
 
-    printf("  init set filename: %s...\n", self->filename);
+    /*printf("    init set filename: \"%s\"\n", self->filename);*/
 
     /* TODO check header */
     /*ret = glbSetFile_open_file(self);

@@ -5,13 +5,12 @@
 #include "glb_config.h"
 
 
-/*  
+/**
  *  this table contains info about 
  *  position of concepts (sets) in docs (ids)
  *
  */
-
-typedef struct glbIntersectionTable
+struct glbIntersectionTable
 {
     size_t set_pool_size;
     size_t answer_size;
@@ -29,16 +28,14 @@ typedef struct glbIntersectionTable
     int (*init)(struct glbIntersectionTable *self, 
 		size_t answer_size, 
 		size_t set_pool_size);
-
-
-} glbIntersectionTable; 
+}; 
 
 extern int glbIntersectionTable_new(struct glbIntersectionTable **rec, 
 				    size_t answer_size, 
 				    size_t set_pool_size);
 
 
-typedef struct glbRequestHandler
+struct glbRequestHandler
 {
     char *id;
 
@@ -97,7 +94,7 @@ typedef struct glbRequestHandler
     int (*leaf_intersection)(struct glbRequestHandler *self);
 
 
-} glbRequestHandler;
+};
 
 /* constructor */
 extern int glbRequestHandler_new(struct glbRequestHandler **rec, 

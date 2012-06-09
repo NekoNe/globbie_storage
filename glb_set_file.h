@@ -26,7 +26,8 @@ typedef struct glbSetFile
 
     int (*init)(struct glbSetFile *self, 
 		const char *path, 
-		const char *name);
+		const char *name,
+		size_t name_size);
 
     int (*del)(struct glbSetFile *self); /* destructor */
 

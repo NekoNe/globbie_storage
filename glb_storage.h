@@ -33,6 +33,8 @@ struct glbStorage
 
     struct ooDict *obj_index;
 
+    struct ooDict *search_cache;
+
     /**********  interface methods  **********/
     int (*del)(struct glbStorage *self);
     int (*str)(struct glbStorage *self);

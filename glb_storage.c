@@ -20,8 +20,11 @@
 
 #include "zhelpers.h"
 
-static int glbStorage_add(struct glbStorage *self,
-			  struct glbData *data);
+static int glbStorage_add_meta(struct glbStorage *self,
+			       struct glbData *data);
+
+static int glbStorage_add_search_results(struct glbStorage *self,
+			       struct glbData *data);
 
 static int
 glbStorage_str(struct glbStorage *self)
@@ -59,8 +62,8 @@ glbStorage_del(struct glbStorage *self)
 
 
 static int
-glbStorage_get(struct glbStorage *self, 
-	       struct glbData *data)
+glbStorage_get_meta(struct glbStorage *self, 
+		    struct glbData *data)
 {
     const char *meta;
     const char *tag_begin = "{\"topic\": \"";
@@ -93,6 +96,127 @@ glbStorage_get(struct glbStorage *self,
     buf += strlen(tag_close);
 
     *buf = '\0';
+
+    return glb_OK;
+}
+
+
+
+static int
+glbStorage_get_search_results(struct glbStorage *self, 
+			      struct glbData *data)
+{
+    char *results;
+    const char *tag_begin = "{\"results\": \"";
+
+    const char *tag_close = "\"}";
+    size_t result_size;
+
+    char *buf;
+    unsigned char *c;
+    int i, ret;
+
+    if (!data->ticket) return glb_FAIL;
+
+    results = (char*)self->search_cache->get(self->search_cache, 
+					     (const char*)data->ticket);
+
+    printf("  RESULTS in Dict: %s\n", results);
+
+    if (!results) {
+	return glb_NEED_WAIT;
+    }
+
+    /* remove/escape symbols */
+    /*c = (unsigned char*)results;
+    while (*c) {
+	if (*c < 32) {
+	    *c = ' ';
+	}
+	if (*c == '\"') *c = ' ';
+	if (*c == '\'') *c = ' ';
+	if (*c == '&') *c = ' ';
+	if (*c == '\\') *c = ' '; 
+	c++;
+	}*/
+
+    result_size = strlen(results);
+
+    data->reply_size = strlen(tag_begin) +\
+	result_size +  strlen(tag_close);
+
+    data->reply = malloc(data->reply_size + 1);
+    if (!data->reply) return glb_FAIL;
+
+    buf = data->reply;
+    memcpy(buf, tag_begin, strlen(tag_begin));
+    buf += strlen(tag_begin);
+
+    memcpy(buf, results, result_size);
+    buf += result_size;
+
+    memcpy(buf, tag_close, strlen(tag_close));
+    buf += strlen(tag_close);
+
+    *buf = '\0';
+
+    return glb_OK;
+}
+
+
+
+static int
+glbStorage_add_meta(struct glbStorage *self, 
+		    struct glbData *data)
+{
+    char buf[GLB_TEMP_BUF_SIZE];
+    int ret;
+
+    printf("\n\n    Storage Register ADD metadata for \"%s\": \"%s\"\n", 
+	   data->id, data->metadata);
+
+    ret = self->obj_index->set(self->obj_index, 
+			       (const char*)data->id, 
+			       (void*)strdup(data->metadata));
+    if (ret != glb_OK) return ret;
+
+
+    /* prepare message for controller */
+    buf[0] = '\0';
+    sprintf(buf, "ChangeState %s 7", data->id);
+
+    data->control_msg = strdup(buf);
+    data->control_msg_size = strlen(buf);
+
+    return glb_OK;
+}
+
+
+static int
+glbStorage_add_search_results(struct glbStorage *self, 
+			      struct glbData *data)
+{
+    char buf[GLB_TEMP_BUF_SIZE];
+    int ret;
+
+
+    printf("\n\n    Storage Register SAVE search results for \"%s\": \"%s\"\n", 
+	   data->ticket, data->results);
+
+    char *results;
+    results = strdup(data->results);
+
+    ret = self->search_cache->set(self->search_cache, 
+				  (const char*)data->ticket,
+				  (void*)results);
+    if (ret != glb_OK) return ret;
+
+
+
+    /* TODO: inform controller about new results */
+    /*sprintf(buf, "ChangeState %s 7", data->id);
+    data->control_msg = strdup(buf);
+    data->control_msg_size = strlen(buf);*/
 
     return glb_OK;
 }
@@ -143,16 +267,49 @@ glbStorage_process(struct glbStorage *self,
 
     ret = glb_copy_xmlattr(root, "obj_id", 
 			   &data->id, &data->id_size);
+
+    ret = glb_copy_xmlattr(root, "ticket", 
+			   &data->ticket, &data->ticket_size);
  
     ret = glb_copy_xmlattr(root, "topics", 
 			   &data->metadata, &data->metadata_size);
 
-    if (!strcmp(action, "add")) {
-	ret = glbStorage_add(self, data);
+    if (!strcmp(action, "add_meta")) {
+	ret = glbStorage_add_meta(self, data);
     }
 
-    if (!strcmp(action, "get")) {
-	ret = glbStorage_get(self, data);
+    if (!strcmp(action, "get_meta")) {
+	ret = glbStorage_get_meta(self, data);
+    }
+
+    if (!strcmp(action, "add_search_results")) {
+
+	/* parse the results */
+	/*for (cur_node = root->children; cur_node; 
+	     cur_node = cur_node->next) {
+	    if (cur_node->type != XML_ELEMENT_NODE) continue;
+
+	    if ((!xmlStrcmp(cur_node->name, (const xmlChar *)"results"))) {
+		value = (char*)xmlNodeGetContent(cur_node);
+		if (!value) continue;
+
+		data->results = strdup(value);
+		data->result_size = strlen(value);
+
+		xmlFree(value);
+	    }
+	    }*/
+	if (!data->results) goto error;
+	if (!data->ticket) goto error;
+	
+	ret = glbStorage_add_search_results(self, data);
+    }
+
+    if (!strcmp(action, "get_search_results")) {
+
+	printf("  prepare results for ticket %s\n", data->ticket);
+
+	ret = glbStorage_get_search_results(self, data);
     }
 
  error:
@@ -164,29 +321,6 @@ glbStorage_process(struct glbStorage *self,
 }
 
 
-static int
-glbStorage_add(struct glbStorage *self, 
-		   struct glbData *data)
-{
-    char buf[GLB_TEMP_BUF_SIZE];
-    int ret;
-
-    printf("\n\n    Storage Register ADD obj_id: \"%s\" topics: \"%s\"\n", 
-	   data->id, data->metadata);
-
-    ret = self->obj_index->set(self->obj_index, 
-			       (const char*)data->id, 
-			       (void*)strdup(data->metadata));
-    if (ret != glb_OK) return ret;
-
-    /* prepare message for controller */
-
-    sprintf(buf, "ChangeState %s 7", data->id);
-    data->control_msg = strdup(buf);
-    data->control_msg_size = strlen(buf);
-
-    return glb_OK;
-}
 
 /**
  *  glbStorage network service startup
@@ -230,8 +364,6 @@ glbStorage_init(struct glbStorage *self)
 
     self->start = glbStorage_start;
     self->process = glbStorage_process;
-    self->add = glbStorage_add;
-    self->get = glbStorage_get;
 
     return glb_OK;
 }
@@ -241,6 +373,8 @@ int glbStorage_new(struct glbStorage **rec,
 {
     struct glbStorage *self;
     struct glbPartition *part;
+    struct glbMaze *maze;
+
     struct ooDict *dict, *storage;
     char buf[GLB_TEMP_BUF_SIZE];
     char *path;
@@ -255,6 +389,9 @@ int glbStorage_new(struct glbStorage **rec,
     self->path = strdup("storage");
 
     ret = ooDict_new(&self->obj_index, GLB_LARGE_DICT_SIZE);
+    if (ret != oo_OK) goto error;
+
+    ret = ooDict_new(&self->search_cache, GLB_MEDIUM_DICT_SIZE);
     if (ret != oo_OK) goto error;
 
     self->partitions = malloc(sizeof(struct glbPartition*) * GLB_NUM_AGENTS);
@@ -285,19 +422,25 @@ int glbStorage_new(struct glbStorage **rec,
 
 
 	/* maze */
-	ret = glbMaze_new(&self->mazes[i]);
+	ret = glbMaze_new(&maze);
 	if (ret) goto error;
 
-	self->mazes[i]->id = i;
+	maze->id = i;
+	maze->storage_path = part->path;
 
+	buf[0] = '\0';
 	sprintf(buf, "maze%d", i);
+
 	path = strdup(buf);
 	if (!path) {
 	    ret = glb_NOMEM;
 	    goto error;
 	}
-	self->mazes[i]->path = path;
-	self->mazes[i]->path_size = strlen(path);
+	maze->path = path;
+	maze->path_size = strlen(path);
+	self->mazes[i] = maze;
+
+	/* TODO: load existing indices into memory */
 
     }
 
