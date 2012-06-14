@@ -120,14 +120,17 @@ glbRequestHandler_next_id(struct glbRequestHandler *self)
 static int
 glbRequestHandler_read_buf(struct glbRequestHandler *self)
 {
+    struct glbSetFile *setfile;
     size_t res;
     int err;
     
-    err = self->set_pool[0]->data->read_buf(self->set_pool[0]->data, 
-					    self->offset, 
-					    self->zero_buffer, 
-					    GLB_LEAF_SIZE * GLB_ID_BLOCK_SIZE, 
-					    &res);
+    setfile = self->set_pool[0]->data;
+    
+    err = setfile->read_buf(setfile, 
+			    self->offset, 
+			    self->zero_buffer, 
+			    GLB_LEAF_SIZE * GLB_ID_BLOCK_SIZE, 
+			    &res);
     if (res) {
         self->zero_buffer_actual_size = res / GLB_ID_BLOCK_SIZE;
         self->zero_buffer_head = 0;
@@ -179,7 +182,7 @@ glbRequestHandler_leaf_intersection(struct glbRequestHandler *self)
     size_t res;
     int comp_res;
     struct glbIntersectionTable *tmp;
-
+    struct glbSetFile *setfile;
 
     /* copy zero_buffer into intersection_table */
     for (i = self->zero_buffer_tail, j = 0; i < self->zero_buffer_head; i++, j++) {
@@ -201,12 +204,14 @@ glbRequestHandler_leaf_intersection(struct glbRequestHandler *self)
 
     for (k = 1; k < self->set_pool_size; k++) {
 
+	setfile = self->set_pool[k]->data;
+
         /* loading set[k] to swap buffer */
-        self->set_pool[k]->data->read_buf(self->set_pool[k]->data, 
-					  self->prev_nodes[k]->offset, 
-					  self->swap, 
-					  GLB_ID_BLOCK_SIZE * GLB_LEAF_SIZE, 
-					  &res);
+        setfile->read_buf(setfile, 
+			  self->prev_nodes[k]->offset, 
+			  self->swap, 
+			  GLB_ID_BLOCK_SIZE * GLB_LEAF_SIZE, 
+			  &res);
         self->swap_size = res;
         self->swap_size = self->swap_size / GLB_ID_BLOCK_SIZE;
 
@@ -249,7 +254,8 @@ glbRequestHandler_leaf_intersection(struct glbRequestHandler *self)
 	       GLB_ID_MATRIX_DEPTH);
 
         for (j = 0; j < self->set_pool_size; j++) {
-            self->result->locsets[j][self->result->answer_actual_size] = self->int_table->locsets[j][i];
+            self->result->locsets[j][self->result->answer_actual_size] =\
+		self->int_table->locsets[j][i];
         }
 
         self->result->answer_actual_size++; 
@@ -293,7 +299,6 @@ begin:
 
     /* I. new id */
     res = self->next_id(self);
-
 
     if (res == glb_EOB) {
          

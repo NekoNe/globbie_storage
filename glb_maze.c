@@ -32,12 +32,13 @@
 #include "glb_maze.h"
 #include "glb_set.h"
 #include "glb_utils.h"
+#include "glb_partition.h"
 #include "glb_request_handler.h"
 #include "oodict.h"
 
-#define DEBUG_MAZE_LEVEL_1 0
-#define DEBUG_MAZE_LEVEL_2 0
-#define DEBUG_MAZE_LEVEL_3 0
+#define DEBUG_MAZE_LEVEL_1 1
+#define DEBUG_MAZE_LEVEL_2 1
+#define DEBUG_MAZE_LEVEL_3 1
 #define DEBUG_MAZE_LEVEL_4 0
 #define DEBUG_MAZE_LEVEL_5 0
 
@@ -240,6 +241,27 @@ glbMaze_alloc_spec(struct glbMaze *self)
     return spec;
 } 
 
+/* allocate setref */
+static struct glbSetRef*
+glbMaze_alloc_setref(struct glbMaze *self)
+{
+    struct glbSetRef *setref;
+
+    if (self->num_setrefs == self->max_setrefs) {
+	fprintf(stderr, "Maze's setref storage capacity exceeded... Resize?\n");
+	return NULL;
+    }
+
+    setref = &self->setref_storage[self->num_setrefs];
+
+    /* init null values */
+    memset(setref, 0, sizeof(struct glbSetRef));
+
+    self->num_setrefs++;
+
+    return setref;
+} 
+
 static struct glbMazeItem*
 glbMaze_find_item(struct glbMazeItem *item,
 		 const char *name)
@@ -266,6 +288,21 @@ glbMaze_find_spec(struct glbMazeSpec *spec,
 
     return NULL;
 }
+
+static struct glbSetRef*
+glbMaze_find_setref(struct glbSetRef *ref,
+		    const char *name)
+{
+    while (ref) {
+	if (!strcmp(ref->name, name))
+	    return ref;
+	ref = ref->next;
+    }
+
+    return NULL;
+}
+
+
 
 
 
@@ -519,10 +556,12 @@ glbMaze_find_context(struct glbMaze *self,
     size_t area; /* "площадь", которую покрывают два отрезка */
     size_t new_area; 
 
+    const size_t num_fields = GLB_LOC_REC_NUM_FIELDS;
+
     /* отрезок из первого концепта */
-    begin = ranges[0][start_from * 2];
+    begin = ranges[0][start_from * num_fields];
     
-    end = ranges[0][start_from * 2 + 1];
+    end = ranges[0][start_from * num_fields + 1];
     area = end - begin + 1;
 
     result_ranges[0] = begin;
@@ -535,29 +574,29 @@ glbMaze_find_context(struct glbMaze *self,
         /* рассчитаем, сколько занимает исходный отрезок вместе с тестируемым */
         area = GLB_CONTEXT_AREA(begin, end, ranges[j][0], ranges[j][1]);        
 
-        result_ranges[2 * j] = ranges[j][0];
-        result_ranges[2 * j + 1] = ranges[j][1];
+        result_ranges[num_fields * j] = ranges[j][0];
+        result_ranges[num_fields * j + 1] = ranges[j][1];
         
-        for (k = 2; k < offset_num[j]; k += 2) {
+        for (k = num_fields; k < offset_num[j]; k += num_fields) {
             
             /* так получаем отрезок, 
               с которым исходный занимает наименьшую площадь */
             new_area =  GLB_CONTEXT_AREA(begin, end, ranges[j][k], ranges[j][k + 1]);        
            
             if (new_area < area) {
-                result_ranges[2 * j] = ranges[j][k];
-                result_ranges[2 * j + 1] = ranges[j][k + 1];
+                result_ranges[num_fields * j] = ranges[j][k];
+                result_ranges[num_fields * j + 1] = ranges[j][k + 1];
                 area = new_area;
             }
         }
         /* исходный отрезок совмещаем с отрезком,
          * полученным чуть выше, и повторяем дальше для него */
-        begin = GLB_MIN(begin, result_ranges[2 * j]);
-        end = GLB_MAX(end, result_ranges[2 * j + 1]);
+        begin = GLB_MIN(begin, result_ranges[num_fields * j]);
+        end = GLB_MAX(end, result_ranges[num_fields * j + 1]);
     }
 
     /* сортировка */
-    qsort(result_ranges, num_concepts, 2 * sizeof(size_t), glb_range_compare);
+    qsort(result_ranges, num_concepts, num_fields * sizeof(size_t), glb_range_compare);
     
     return 0;
 }
@@ -573,7 +612,8 @@ glbMaze_add_locs(struct glbMaze *self,
     long b = 0;
     long e = 0;
 
-    long curr_begin = 0;
+    /* current begin position for comparisons */
+    long curr_begin = -1;
 
     char rec[GLB_LOC_REC_SIZE];
     size_t res;
@@ -670,27 +710,79 @@ glbMaze_save_local_index(struct glbMaze *self,
     return glb_OK;
 }
 
+static int
+glbMaze_read_refs(struct glbMaze *self,
+		  xmlNodePtr input_node,
+		  struct glbMazeItem *item)
+{
+    struct glbSetRef *ref = NULL;
+    xmlNodePtr cur_node;
+    char *ref_name = NULL;
+    int ret = glb_OK;
+
+    long num_items = 0;
+
+    /* read subclass refs */
+    for (cur_node = input_node; cur_node; 
+	 cur_node = cur_node->next) {
+	if (cur_node->type != XML_ELEMENT_NODE) continue;
+	if ((!xmlStrcmp(cur_node->name, (const xmlChar *)"ref"))) {
+
+	    ref_name = (char *)xmlGetProp(cur_node,  
+					   (const xmlChar *)"n");
+	    if (!ref_name) goto error;
+
+	    if (item->refs) 
+		ref = glbMaze_find_setref(item->refs, ref_name);
+
+	    if (!ref) {
+		ref = glbMaze_alloc_setref(self);
+		if (!ref) goto error;
+
+		ref->name = strdup(ref_name);
+
+		ref->next = item->refs;
+		item->refs = ref;
+	    }
+
+	    ret = glb_get_xmlattr_num(cur_node, "num", &num_items);
+	    if (ret != glb_OK) continue;
+
+	    ref->num_items += num_items;
+
+	    if (DEBUG_MAZE_LEVEL_4)
+		printf("   == REF: %s [%lu]\n", 
+		       ref_name, (unsigned long)ref->num_items);
+
+	}
+
+    }
+
+    ret = glb_OK;
+
+error:
+    if (ref_name)
+	xmlFree(ref_name);
+
+
+    return ret;
+}
+
+
+
 static int 
-glbMaze_add_conc(struct glbMaze *self,
-		 struct glbMazeSpec *topic_spec,
-		 xmlNodePtr input_node,
-		 const char *name,
-		 const char *obj_id)
+glbMaze_read_conc(struct glbMaze *self,
+		  xmlNodePtr input_node,
+		  const char *name,
+		  struct glbMazeItem **curr_item)
 {
     struct glbMazeItem *item;
     struct glbMazeSpec *spec;
     struct glbMazeLoc *loc;
-
-    struct glbSet *set;
-
-    size_t global_offset;
-
-    char buf[GLB_TEMP_BUF_SIZE];
+    xmlNodePtr cur_node;
     char *value;
     size_t name_size;
     int ret;
-
-    name_size = strlen(name);
 
     /* registration of a new root item */
     item = self->item_dict->get(self->item_dict, name);
@@ -699,7 +791,7 @@ glbMaze_add_conc(struct glbMaze *self,
 	if (!item) return glb_NOMEM;
 
 	item->name = strdup(name);
-	item->name_size = name_size;
+	item->name_size = strlen(name);
 
 	ret = self->item_dict->set(self->item_dict,
 				   name, item);
@@ -711,6 +803,44 @@ glbMaze_add_conc(struct glbMaze *self,
 	    printf("  ++ root registration of item %s\n", 
 		   item->name);
     }
+
+    /* read subclass refs */
+    for (cur_node = input_node; cur_node; 
+	 cur_node = cur_node->next) {
+	if (cur_node->type != XML_ELEMENT_NODE) continue;
+	if ((!xmlStrcmp(cur_node->name, (const xmlChar *)"refs")))
+	    glbMaze_read_refs(self, cur_node->children, item);
+    }
+
+
+
+
+    *curr_item = item;
+
+    return glb_OK;
+}
+
+static int 
+glbMaze_add_conc(struct glbMaze *self,
+		 xmlNodePtr input_node,
+		 const char *name,
+		 const char *obj_id)
+{
+    struct glbMazeItem *item;
+    struct glbMazeSpec *spec;
+    struct glbMazeLoc *loc;
+
+    struct glbSet *set;
+
+    int ret;
+
+    /* build maze dict */
+    ret = glbMaze_read_conc(self, 
+			    input_node, 
+			    name, 
+			    &item);
+    if (ret != glb_OK) return ret;
+
 
     /* add obj_id to appropriate set */
 
@@ -814,10 +944,11 @@ glbMaze_build_contexts(struct glbMaze *self,
 
     char buf[GLB_TEMP_BUF_SIZE * 10];
     
-    size_t curr_loc = 0;
+    long curr_loc = -1;
     size_t begin_loc = 0;
     const char *output;
     size_t output_size;
+    const size_t num_fields = GLB_LOC_REC_NUM_FIELDS;
 
     int context_count = 0;
 
@@ -842,17 +973,17 @@ glbMaze_build_contexts(struct glbMaze *self,
 	    printf("    == linear positions in text:\n");
 
 	for (j = 0; j < request->set_pool_size; j++ ) {
-	    begin_loc = self->result_ranges[2 * j];
+	    begin_loc = self->result_ranges[num_fields * j];
 
 	    printf(" (%d, %d) ",
-		   self->result_ranges[2 * j],
-		   self->result_ranges[2 * j + 1]);
+		   self->result_ranges[num_fields * j],
+		   self->result_ranges[num_fields * j + 1]);
 	    if (curr_loc == begin_loc) {
 		if (DEBUG_MAZE_LEVEL_2)
 		    printf("    ?? Doublet found: %lu? :((\n", begin_loc);
 		return glb_FAIL;
 	    }
-	    curr_loc = self->result_ranges[2 * j];
+	    curr_loc = self->result_ranges[num_fields * j];
 
 	}
 
@@ -999,7 +1130,7 @@ glbMaze_fetch_results(struct glbMaze *self,
 
 	printf("   .. fetch obj_id [%s]: %d\n", buf, ret);
 
-	if (ret != glb_OK) return ret;
+	if (ret != glb_OK) continue;
 
 	data->num_results++;
     }
@@ -1009,20 +1140,61 @@ glbMaze_fetch_results(struct glbMaze *self,
 
 
 static int 
+glbMaze_add_domain_terms(struct glbMaze *self,
+			 struct glbSet *set,
+			 const char *domain_name)
+{
+    struct glbMazeItem *item;
+    struct glbSetRef *ref;
+    int ret;
+
+    if (DEBUG_MAZE_LEVEL_2)
+	printf("\n    .. add terms from domain \"%s\"..\n", 
+	       domain_name);
+
+    item = self->item_dict->get(self->item_dict, domain_name);
+    if (!item) {
+	if (DEBUG_MAZE_LEVEL_2)
+	    printf("\n  .. no objs found in domain \"%s\"\n", domain_name);
+
+	return glb_NO_RESULTS;
+    }
+
+
+    if (item->refs) {
+	
+	printf("    ++ domain %s has refs!\n", domain_name);
+
+	for (ref = item->refs; ref; ref = ref->next) {
+	    printf("   == REF: %s [%lu]\n", 
+		   ref->name, (unsigned long)ref->num_items);
+
+	}
+
+	set->refs = item->refs;
+    }
+
+    return glb_OK;
+}
+
+
+static int 
 glbMaze_add_search_term(struct glbMaze *self, 
-			const char *name)
+			const char *conc_name,
+			const char *domain_name)
 {
     struct glbMazeItem *item;
     struct glbSet *set;
     int ret;
 
     if (DEBUG_MAZE_LEVEL_2)
-	printf("\n  .. add search term %s\n", name);
+	printf("\n    .. add search term %s [domain: %s]\n", 
+	       conc_name, domain_name);
 
-    item = self->item_dict->get(self->item_dict, name);
+    item = self->item_dict->get(self->item_dict, conc_name);
     if (!item) {
 	if (DEBUG_MAZE_LEVEL_2)
-	    printf("\n  .. no such set found: %s\n", name);
+	    printf("\n  .. no such set found: %s\n", conc_name);
 
 	return glb_NO_RESULTS;
     }
@@ -1040,6 +1212,11 @@ glbMaze_add_search_term(struct glbMaze *self,
 
     item->num_requests++;
 
+
+    if (domain_name)
+	glbMaze_add_domain_terms(self, set, domain_name);
+
+
     self->search_set_pool[self->search_set_pool_size] = set;
     self->search_set_pool_size++;
 
@@ -1056,41 +1233,42 @@ glbMaze_search(struct glbMaze *self,
     xmlNodePtr root, cur_node;
     struct glbSet *set;
     struct glbRequestHandler *request = NULL;
-    char *value = NULL;
+
+    char *conc_name = NULL;
+    char *domain_name = NULL;
 
     int ret = glb_OK;
     int i;
 
     if (DEBUG_MAZE_LEVEL_1)
-	printf("    !! Maze %d  search...\n", 
+	printf("    .. Maze %d:  search in progress...\n", 
 	       self->id);
 
     doc = xmlReadMemory(data->interp, 
 			data->interp_size,
 			"none.xml", NULL, 0);
     if (!doc) {
-        fprintf(stderr, "Failed to parse interp...");
+        fprintf(stderr, "    -- Failed to parse interp.. :(\n");
 	return glb_FAIL;
     }
 
-    if (DEBUG_MAZE_LEVEL_2)
+    if (DEBUG_MAZE_LEVEL_3)
 	printf("    ++ Maze %d: interp XML parse OK!\n", 
 	       self->id);
 
     root = xmlDocGetRootElement(doc);
     if (!root) {
-	fprintf(stderr,"empty document\n");
+	fprintf(stderr,"    -- empty XML document :(\n");
 	ret = glb_FAIL;
 	goto error;
     }
 
     if (xmlStrcmp(root->name, (const xmlChar *) "concepts")) {
-	fprintf(stderr,"Document of the wrong type: the root node " 
-		" must be \"concepts\"");
+	fprintf(stderr,"    -- Document of the wrong type: the root node " 
+		" must be \"concepts\"\n");
 	ret = glb_FAIL;
 	goto error;
     }
-
 
     /* reset agents */
     self->num_agents = 0;
@@ -1099,26 +1277,39 @@ glbMaze_search(struct glbMaze *self,
     for (cur_node = root->children; cur_node; cur_node = cur_node->next) {
         if (cur_node->type != XML_ELEMENT_NODE) continue;
 
-	if ((!xmlStrcmp(cur_node->name, (const xmlChar *)"conc"))) {
+	if ((!xmlStrcmp(cur_node->name,
+			(const xmlChar *)"conc"))) {
 
-	    value = (char *)xmlGetProp(cur_node,  (const xmlChar *)"n");
-	    if (!value) goto error;
+	    conc_name = (char *)xmlGetProp(cur_node,
+					   (const xmlChar *)"n");
+	    if (!conc_name) goto error;
 
-	    ret = glbMaze_add_search_term(self, value);
+	    domain_name = (char *)xmlGetProp(cur_node,
+				       (const xmlChar *)"domain");
+
+	    ret = glbMaze_add_search_term(self,
+					  (const char*)conc_name,
+					  (const char*)domain_name);
 	    if (ret != glb_OK) goto error;
-	    
-	    xmlFree(value);
-	    value = NULL;
+
+	    xmlFree(conc_name);
+	    conc_name = NULL;
+
+	    if (domain_name) {
+		xmlFree(domain_name);
+		domain_name = NULL;
+	    }
+
 	}
     }
 
-    printf("    ++ NUM INTERSECTION SETS: %d\n", 
+    printf("\n    ++ NUM INTERSECTION SETS: %d\n", 
 	   self->search_set_pool_size);
 
     if (self->search_set_pool_size == 0) return glb_NO_RESULTS;
 
     /* sorting the sets by size */
-    qsort(self->search_set_pool, 
+    qsort(self->search_set_pool,
 	  self->search_set_pool_size, 
 	  sizeof(struct glbSet*), glbSet_cmp);
 
@@ -1170,8 +1361,11 @@ glbMaze_search(struct glbMaze *self,
 
 error:
 
-    if (value)
-	xmlFree(value);
+    if (conc_name)
+	xmlFree(conc_name);
+
+    if (domain_name)
+	xmlFree(domain_name);
 
     if (request)
 	request->del(request);
@@ -1232,9 +1426,8 @@ glbMaze_update(struct glbMaze *self,
 	    value = (char*)xmlGetProp(cur_node,  (const xmlChar *)"n");
 	    if (!value) continue;
 
-	    ret = glbMaze_add_conc(self, 
-				   NULL, 
-				   cur_node->children, 
+	    ret = glbMaze_add_conc(self,
+				   cur_node->children,
 				   (const char*)value,
 				   data->local_id);
 	    if (ret != glb_OK) goto error;
@@ -1252,19 +1445,103 @@ glbMaze_update(struct glbMaze *self,
     return ret;
 }
 
+static int 
+glbMaze_read_index(struct glbMaze *self, 
+		   const char *filename)
+{
+    xmlDocPtr doc;
+    xmlNodePtr root, cur_node;
+    struct glbMazeItem *item;
+    char *value = NULL;
+    int ret = glb_OK;
+
+    doc = xmlParseFile(filename);
+    if (!doc) {
+	fprintf(stderr, "    -- couldn't read \"%s\" :( \n", filename);
+	ret = glb_IO_FAIL;
+	goto error;
+    }
+
+    root = xmlDocGetRootElement(doc);
+    if (!root) {
+	fprintf(stderr,"    -- empty document\n");
+	ret = glb_FAIL;
+	goto error;
+    }
+
+    if (xmlStrcmp(root->name, (const xmlChar *) "maze")) {
+	fprintf(stderr,"Document of the wrong type: the root node " 
+		" must be \"maze\"");
+	ret = glb_FAIL;
+	goto error;
+    }
+
+    for (cur_node = root->children; cur_node; cur_node = cur_node->next) {
+        if (cur_node->type != XML_ELEMENT_NODE) continue;
+
+	if ((!xmlStrcmp(cur_node->name, (const xmlChar *)"conc"))) {
+	    value = (char*)xmlGetProp(cur_node,  (const xmlChar *)"n");
+	    if (!value) continue;
+
+	    ret = glbMaze_read_conc(self,
+				    cur_node->children,
+				    (const char*)value,
+				    &item);
+	    if (ret != glb_OK) goto error;
+	}
+    }
+
+ error:
+
+    if (value)
+	xmlFree(value);
+
+    xmlFreeDoc(doc);
+
+    return ret;
+}
+
 
 
 static int 
 glbMaze_init(struct glbMaze *self)
 {
+    char id_buf[GLB_ID_MATRIX_DEPTH + 1];
+    char path_buf[GLB_TEMP_BUF_SIZE];
+    int ret;
 
-    self->del           = glbMaze_del;
-    self->init          = glbMaze_init;
-    self->str           = glbMaze_str;
+    memset(id_buf, '0', GLB_ID_MATRIX_DEPTH);
+    id_buf[GLB_ID_MATRIX_DEPTH] = '\0';
 
-    self->update          = glbMaze_update;
-    self->sort          = glbMaze_sort_items;
-    self->search          = glbMaze_search;
+    /* load existing indices */
+
+    if (DEBUG_MAZE_LEVEL_1)
+	printf("\n  .. MAZE is loading indices from %s to %s...\n",
+	       id_buf, self->partition->curr_obj_id);
+
+    while (1) {
+	inc_id(id_buf);
+	ret = compare(id_buf, self->partition->curr_obj_id);
+	if (ret == glb_MORE) break;
+
+	glb_make_id_path(path_buf,
+			 self->storage_path,
+			 id_buf, 
+			 "index");
+
+	if (DEBUG_MAZE_LEVEL_2)
+	    printf("  .. reading index %s..", path_buf);
+
+	ret = glbMaze_read_index(self, (const char*)path_buf);
+
+	if (DEBUG_MAZE_LEVEL_2) {
+	    if (ret == glb_OK) 
+		puts(" [OK]");
+	    else
+		puts(" [FAIL]");
+	}
+    }
+
 
     return glb_OK;
 }
@@ -1310,6 +1587,9 @@ glbMaze_new(struct glbMaze **maze)
 	goto error;
     }
     self->spec_storage_size = GLB_MAZE_SPEC_STORAGE_SIZE;
+
+
+
 
     /* text content buffer */
     self->text = malloc(GLB_MAX_TEXT_BUF_SIZE + 1);
@@ -1373,8 +1653,18 @@ glbMaze_new(struct glbMaze **maze)
     self->max_agents = GLB_MAZE_NUM_AGENTS;
 
 
+    /* allocate setrefs */
+    self->setref_storage = malloc(sizeof(struct glbSetRef) *\
+				GLB_MAZE_SETREF_STORAGE_SIZE);
+    if (!self->setref_storage) {
+	ret = glb_NOMEM;
+	goto error;
+    }
+    self->max_setrefs = GLB_MAZE_SETREF_STORAGE_SIZE;
 
-    /* cache */
+
+
+    /* set cache */
     self->search_set_pool = malloc(GLB_MAZE_NUM_CACHE_SETS *\
 				     sizeof(struct glbSet*));
     if (!self->search_set_pool) {
@@ -1400,8 +1690,14 @@ glbMaze_new(struct glbMaze **maze)
     }
     self->cache_set_storage_size = GLB_MAZE_NUM_CACHE_SETS;
 
+    self->del           = glbMaze_del;
+    self->init          = glbMaze_init;
+    self->str           = glbMaze_str;
 
-    glbMaze_init(self);
+    self->update          = glbMaze_update;
+    self->sort          = glbMaze_sort_items;
+    self->search          = glbMaze_search;
+
 
     *maze = self;
 
