@@ -420,7 +420,6 @@ int glbStorage_new(struct glbStorage **rec,
 
 	self->partitions[i] = part;
 
-
 	/* maze */
 	ret = glbMaze_new(&maze);
 	if (ret) goto error;
@@ -438,9 +437,13 @@ int glbStorage_new(struct glbStorage **rec,
 	}
 	maze->path = path;
 	maze->path_size = strlen(path);
+	maze->partition = part;
+
 	self->mazes[i] = maze;
 
 	/* TODO: load existing indices into memory */
+	maze->init(maze);
+
 
     }
 
