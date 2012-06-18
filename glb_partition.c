@@ -208,7 +208,7 @@ glbPartition_add(struct glbPartition *self,
 
     /* write index */
     glb_write_file((const char*)path_buf, 
-		   "index", data->index, data->index_size);
+		   "index.db", data->index, data->index_size);
 
     printf("    !! Storage Partition #%d:  database files written: %s\n", 
 	   self->id, (const char*)path_buf);

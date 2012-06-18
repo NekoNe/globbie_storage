@@ -94,8 +94,7 @@ void *glbStorage_add_agent(void *arg)
 	    printf("    ++ obj saved with local id: %s\n", 
 		   data->local_id);
 
-	    ret = maze->update(maze, 
-			       data);
+	    ret = maze->read_index(maze, (const char*)data->local_id);
 	    if (ret != glb_OK) goto final;
 
 	    /* notify register */
@@ -127,8 +126,8 @@ void *glbStorage_add_agent(void *arg)
 
 	    data->interp = s_recv(outbox, &data->interp_size);
 
-	    printf("    ++  PARTITION AGENT #%d: INTERP: %s\n", 
-		   args->agent_id, data->interp);
+	    /*printf("    ++  PARTITION AGENT #%d: INTERP: %s\n", 
+	      args->agent_id, data->interp); */
 
 	    ticket = strstr(data->spec, " ");
 	    ticket++;
