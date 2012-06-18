@@ -51,9 +51,8 @@ glbSet_add(struct glbSet *self, const char *id)
     if (GLB_DEBUG_SET_LEVEL_2)
         printf("  appending obj_id %s to file...\n", id);
 
-    ret = self->data->add(self->data, id, &offset);
+    /*ret = self->data->add(self->data, id, &offset);
 
-    /* indexing */
     if (self->num_objs % GLB_LEAF_SIZE == 0) {
         ret = self->index->addElem(self->index, id, offset);
         ret = self->index->update(self->index, self->index->root);
@@ -63,7 +62,8 @@ glbSet_add(struct glbSet *self, const char *id)
     self->index->array[self->index->node_count - 1].id_last = id;
 
     self->num_objs++;
-    
+    */
+
     return glb_OK;
 }
 

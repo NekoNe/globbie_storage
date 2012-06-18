@@ -22,7 +22,7 @@ TEST_CLIENT_OBJ = glb_test_client.o
 
 program: $(COLL_OBJ) $(STORAGE_OBJ) $(TEST_CLIENT_OBJ) 
 	cc -o glb_coll_server $(COLL_OBJ) -lzmq -lpthread -Wall -lxml2 -pedantic -Ansi
-	cc -o glb_storage_server $(STORAGE_OBJ) -lzmq -lpthread -lxml2 -Wall -pedantic -Ansi
+	cc -o glb_storage_server $(STORAGE_OBJ) -lzmq -lpthread -ldb -lxml2 -Wall -pedantic -Ansi
 	cc -o glb_test_client $(TEST_CLIENT_OBJ) -lzmq -Wall -pedantic -Ansi
 
 

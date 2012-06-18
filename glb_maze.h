@@ -53,7 +53,7 @@ struct glbMazeTopic
 
 struct glbMazeItem
 {
-    const char *name;
+    char *name;
     size_t name_size;
 
     struct glbMazeSpec *topics;
@@ -62,8 +62,11 @@ struct glbMazeItem
     struct glbSetRef *refs;
     size_t num_refs;
 
-    struct glbSet *set;
-    const char *set_path;
+  /*struct glbSet *set;
+    const char *set_path;*/
+
+    /* ids cache buffer */
+    char *obj_ids;
 
     size_t num_objs;
 
@@ -131,8 +134,8 @@ struct glbMaze
     int (*del)(struct glbMaze *self);
     const char* (*str)(struct glbMaze *self);
 
-    int (*update)(struct glbMaze *self,
-		  struct glbData *data);
+    int (*read_index)(struct glbMaze *self,
+		      const char *obj_id);
 
     int (*sort)(struct glbMaze *self);
 

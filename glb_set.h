@@ -32,7 +32,6 @@ struct glbSet
     struct glbSetFile *data;    /* data on hard drive */
     struct glbIndexTree *index; /* data index */
 
-
     /* logical group */
     struct glbSetRef *refs;
     size_t num_refs;

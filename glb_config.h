@@ -130,7 +130,7 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 #define GLB_MAZE_SPEC_STORAGE_SIZE 1024 * 1024
 #define GLB_MAZE_LOC_STORAGE_SIZE 1024 * 1024
 
-#define GLB_MAZE_SETREF_STORAGE_SIZE 256
+#define GLB_MAZE_SETREF_STORAGE_SIZE 1024 * 1024
 
 #define GLB_MAZE_NUM_AGENTS 10
 #define GLB_MAZE_NUM_CACHE_SETS 1000
@@ -142,7 +142,7 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 
 #define GLB_RESULT_BUF_SIZE 1024 * 10 * sizeof(char)
 
-#define GLB_LOC_REC_SIZE (sizeof(long) + sizeof(long))
+#define GLB_LOC_REC_SIZE (sizeof(unsigned long) + sizeof(unsigned long))
 
 #define GLB_MAX_CONC_UNITS 10000
 
