@@ -82,7 +82,10 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 #define GLB_COLLECTION_DEBUG_LEVEL_2 1
 
 #define GLB_ID_MATRIX_DEPTH 3
+#define GLB_ID_SIZE  (GLB_ID_MATRIX_DEPTH * sizeof(char))
+#define GLB_ID_BATCH_SIZE 10
 
+#define GLB_GROW_FACTOR 2
 
 #define GLB_NAME_LENGTH 50
 
@@ -95,7 +98,7 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 
 #define GLB_TREE_OFFSET_SIZE 2
 
-#define GLB_INDEX_ID_BATCH_SIZE 100
+#define GLB_INDEX_ID_BATCH_SIZE 300
 
 #define SPACE_CHAR 32
 
@@ -109,8 +112,6 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 #define GLB_LEAF_CHUNK_SIZE 100
 
 #define GLB_SIZE_OF_OFFSET sizeof(size_t)
-
-#define GLB_ID_BLOCK_SIZE (GLB_ID_MATRIX_DEPTH * sizeof(char))
 
 /* alphanumeric symbols:
    0-9, A-Z, a-z */
@@ -130,9 +131,9 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 #define GLB_MAZE_SPEC_STORAGE_SIZE 1024 * 1024
 #define GLB_MAZE_LOC_STORAGE_SIZE 1024 * 1024
 
-#define GLB_MAZE_SETREF_STORAGE_SIZE 1024 * 1024
+#define GLB_MAZE_REF_STORAGE_SIZE 1024 * 1024
 
-#define GLB_MAZE_NUM_AGENTS 10
+#define GLB_MAZE_NUM_AGENTS 100
 #define GLB_MAZE_NUM_CACHE_SETS 1000
 
 #define GLB_MAZE_MAX_DEPTH 3
@@ -140,7 +141,8 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 #define GLB_TEMP_BUF_SIZE 1024
 #define GLB_TEMP_SMALL_BUF_SIZE 64
 
-#define GLB_RESULT_BUF_SIZE 1024 * 10 * sizeof(char)
+#define GLB_RESULT_BUF_SIZE 1024 * 100 * sizeof(char)
+#define GLB_DOMAIN_BUF_SIZE 1024 * 100 * sizeof(char)
 
 #define GLB_LOC_REC_SIZE (sizeof(unsigned long) + sizeof(unsigned long))
 
@@ -152,7 +154,7 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 
 #define GLB_MAX_CONTEXTS 3
 
-#define GLB_MAX_RESULT_SIZE 1000
+#define GLB_MAX_RESULT_SIZE (1024 * sizeof(char))
 #define GLB_CONTEXT_RADIUS 100
 
 
@@ -164,7 +166,34 @@ enum {glb_EQUALS, glb_LESS, glb_MORE, glb_NOT_COMPARABLE } glb_comparison_codes;
 #define HIGHLIGHT_BEGIN "<b>"
 #define HIGHLIGHT_END "</b>"
 
-#define SPACE ".."
+#define GLB_CONTEXT_SEPAR ".."
 
+#define GLB_RESULT_ROW_BEGIN "<div class=\\\"msg_row\\\">"\
+        "<div class=\\\"msg_row_title\\\">%s</div>"\
+	"<div class=\\\"msg_row_desc\\\">"
+
+#define GLB_RESULT_ROW_END "</div></div>"
+
+#define GLB_DELIVERY_OK "OK"
+#define GLB_DELIVERY_OK_SIZE strlen(GLB_DELIVERY_OK)
+
+
+#define GLB_JSON_RESULT_BEGIN "{\"results\": {\"format\": \"JSON\""
+#define GLB_JSON_RESULT_BEGIN_SIZE strlen(GLB_JSON_RESULT_BEGIN)
+
+#define GLB_JSON_RESULT_END "}}"
+#define GLB_JSON_RESULT_END_SIZE 2
+
+#define GLB_JSON_EXACT ",\"exact\": \""
+#define GLB_JSON_EXACT_SIZE strlen(GLB_JSON_EXACT)
+
+#define GLB_JSON_SIMILAR_BEGIN ",\"similar\": \""
+#define GLB_JSON_SIMILAR_BEGIN_SIZE strlen(GLB_JSON_SIMILAR_BEGIN)
+
+#define GLB_JSON_STR_END "\""
+#define GLB_JSON_STR_END_SIZE 1
+
+#define GLB_JSON_SEPAR ","
+#define GLB_JSON_SEPAR_SIZE 1
 
 #endif
