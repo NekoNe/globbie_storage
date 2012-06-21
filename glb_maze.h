@@ -27,9 +27,15 @@ struct glbData;
 struct glbSet;
 struct glbPartition;
 
+typedef enum output_dest_t { GLB_SEARCH_RESULTS, 
+			     GLB_DOMAINS, 
+			     GLB_METADATA, 
+			     GLB_TOPICS } output_dest_t;
+
 struct glbMazeRef
 {
     struct glbMazeItem *item;
+    size_t num_objs;
     struct glbMazeRef *next;
 };
 
@@ -59,16 +65,16 @@ struct glbMazeItem
     struct glbMazeSpec *topics;
     struct glbMazeSpec *specs;
 
-    struct glbSetRef *refs;
+    struct glbMazeRef *refs;
     size_t num_refs;
 
-  /*struct glbSet *set;
+    /*struct glbSet *set;
     const char *set_path;*/
 
     /* ids cache buffer */
     char *obj_ids;
-
-    size_t num_objs;
+    size_t max_obj_ids;
+    size_t num_obj_ids;
 
     size_t num_requests;
 
@@ -105,6 +111,17 @@ struct glbMaze
     char *results;
     char *curr_results_buf;
     size_t results_size;
+    size_t max_results_size;
+    size_t results_free_space;
+
+    /* domain buf */
+    char *domains;
+    char *curr_domains_buf;
+    size_t domains_size;
+    size_t max_domains_size;
+    size_t domains_free_space;
+
+
 
     /* agent locsets */
     size_t **locsets;
@@ -115,9 +132,9 @@ struct glbMaze
     size_t num_agents;
     size_t max_agents;
 
-    struct glbSetRef *setref_storage;
-    size_t num_setrefs;
-    size_t max_setrefs;
+    struct glbMazeRef *ref_storage;
+    size_t num_refs;
+    size_t max_refs;
 
    /* set cache */
     struct glbSet *head;
@@ -128,11 +145,18 @@ struct glbMaze
     size_t search_set_pool_size;
     size_t max_search_set_pool_size;
 
+  
+    struct glbRequestHandler *request;
 
     /******** public methods ********/
     int (*init)(struct glbMaze *self);
     int (*del)(struct glbMaze *self);
     const char* (*str)(struct glbMaze *self);
+
+    int (*write)(struct glbMaze *self,
+		 output_dest_t dest,
+		 const char    *buf,
+		 size_t        buf_size);
 
     int (*read_index)(struct glbMaze *self,
 		      const char *obj_id);

@@ -76,7 +76,7 @@ struct glbRequestHandler
 		struct glbSet **set_pool,
 		size_t set_pool_size);
 
-    /*********** internal mathods **********/
+    /*********** internal methods **********/
 
     /* takes next id from zero_buffer. writes it into *id */ 
     int (*next_id)(struct glbRequestHandler *self);
@@ -97,11 +97,8 @@ struct glbRequestHandler
 };
 
 /* constructor */
-extern int glbRequestHandler_new(struct glbRequestHandler **rec, 
-				 size_t result_size,
-				 size_t offset,
-				 struct glbSet **set_pool,
-				 size_t set_pool_size);
+extern int glbRequestHandler_new(struct glbRequestHandler **rec);
+
 
 
 

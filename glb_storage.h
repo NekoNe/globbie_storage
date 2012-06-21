@@ -41,14 +41,11 @@ struct glbStorage
 
     int (*start)(struct glbStorage *self);
 
-    int (*process)(struct glbStorage *self, 
-		   struct glbData *data);
+    /*int (*add)(struct glbStorage *self, 
+      struct glbData *data);
 
-    int (*add)(struct glbStorage *self, 
-		   struct glbData *data);
-
-    int (*get)(struct glbStorage *self, 
-		   struct glbData *data);
+      int (*get)(struct glbStorage *self, 
+      struct glbData *data); */
 
 };
 

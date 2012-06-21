@@ -186,7 +186,7 @@ glbSetFile_read_index(struct glbSetFile *self,
 	if (ret != glb_OK) goto error;
 
 
-	node = &index->array[index->node_count - 1];
+	node = &index->array[index->num_nodes - 1];
 	node->id_last = node->id;
 
 

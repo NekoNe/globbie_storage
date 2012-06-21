@@ -27,31 +27,40 @@ struct glbSet
     size_t path_size;
 
     /* number of ids in set */
-    size_t num_objs;
+    const char *obj_ids;
+    size_t num_obj_ids;
+    size_t obj_ids_size;
 
-    struct glbSetFile *data;    /* data on hard drive */
     struct glbIndexTree *index; /* data index */
 
+    struct glbSetFile *data;    /* data on hard drive */
+
     /* logical group */
-    struct glbSetRef *refs;
+    struct glbSet *refs;
     size_t num_refs;
 
-    /* for active usage lists */
+    /* for lists */
     struct glbSet *next;
     struct glbSet *prev;
 
+    struct glbSet *next_ref;
+
     /**********  public methods  **********/
 
-    int (*init)(struct glbSet *self, 
-		const char *path,
-		const char *name,
-		size_t name_size);
+    int (*init)(struct glbSet *self);
 
     int (*del)(struct glbSet *self);
+    int (*str)(struct glbSet *self);
 
     /* add id to this set. bytecode contains locset */
     int (*add)(struct glbSet *self, const char *id);
     int (*lookup)(struct glbSet *self, const char *id);
+    int (*build_index)(struct glbSet *self);
+    int (*read_buf)(struct glbSet *self, 
+		    size_t offset, 
+		    char *buffer, 
+		    size_t size, 
+		    size_t *result);
 
 } glbSet;
 
