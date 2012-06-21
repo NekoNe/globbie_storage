@@ -12,7 +12,7 @@
  *
  *   Initial author and maintainer:
  *         Dmitri Dmitriev aka M0nsteR <dmitri@globbie.net>
-
+ *
  *   ----------
  *   glb_maze.c
  *   Globbie Maze Dictionary implementation
@@ -44,6 +44,13 @@
 #define DEBUG_MAZE_LEVEL_4 1
 #define DEBUG_MAZE_LEVEL_5 0
 
+/* forward declarations */
+static int 
+glbMaze_get_item(struct glbMaze *self,
+		 const char *name,
+		 size_t name_size,
+		 struct glbMazeItem **result);
+
 static int 
 glbMaze_item_cmp(const void *a,
 		const void *b)
@@ -73,10 +80,10 @@ glbSet_cmp(const void *a,
     set1 = (struct glbSet**)a;
     set2 = (struct glbSet**)b;
 
-    if ((*set1)->num_objs == (*set2)->num_objs) return 0;
+    if ((*set1)->num_obj_ids == (*set2)->num_obj_ids) return 0;
 
     /* ascending order */
-    if ((*set1)->num_objs > (*set2)->num_objs) return 1;
+    if ((*set1)->num_obj_ids > (*set2)->num_obj_ids) return 1;
 
     return -1;
 }
@@ -101,37 +108,42 @@ glbMaze_show_item(struct glbMaze *self,
 		 size_t depth)
 {
     struct glbMazeLoc *loc;
+    struct glbMazeRef *ref;
     struct glbMazeSpec *spec;
     struct glbMazeItem *curr_item;
+    char buf[GLB_TEMP_BUF_SIZE];
 
     size_t offset_size = sizeof(char) * OFFSET_SIZE * depth;
     char *offset = malloc(offset_size + 1);
+    int i;
 
     memset(offset, SPACE_CHAR, offset_size);
     offset[offset_size] = '\0';
 
     if (depth == 0) puts("-----");
 
-    printf("%sconc: %s   ", offset, item->name);
+    printf("%sconc: %s  [obj_ids: %d] ",
+	   offset, item->name, item->num_obj_ids);
 
-    if (item->specs) {
-	printf("\n%sspecs:\n", offset);
 
-	spec = item->specs;
-	while (spec) {
-
-	    printf("%s  spec \"%s\":\n", offset, spec->name);
-	    
-	    curr_item = spec->items;
-	    while (curr_item) {
-		glbMaze_show_item(self, curr_item, depth + 1);
-		curr_item = curr_item->next;
-	    }
-
-	    spec = spec->next;
-	}
-
+    buf[GLB_ID_SIZE] = '\0';
+    for (i = 0; i < item->num_obj_ids; i++) {
+	memcpy(buf, item->obj_ids + (i * GLB_ID_SIZE), GLB_ID_SIZE);
+	printf("[%s] ", buf);
     }
+    puts("");
+  
+
+    if (item->refs) {
+	printf("    == REFS: ");
+	ref = item->refs;
+	while (ref) {
+	    printf("[%s:%d] ", ref->item->name, ref->num_objs);
+	    ref = ref->next;
+	}
+	puts("");
+    }
+  
 
     free(offset);
 
@@ -196,6 +208,11 @@ glbMaze_alloc_agent_set(struct glbMaze *self)
     }
 
     set = self->agent_set_storage[self->num_agents];
+
+    printf("%d %p %p\n", self->num_agents, set, set->init);
+
+    set->init(set);
+
     self->num_agents++;
 
     return set;
@@ -203,9 +220,11 @@ glbMaze_alloc_agent_set(struct glbMaze *self)
 
 /* allocate item */
 static struct glbMazeItem*
-glbMaze_alloc_item(struct glbMaze *self)
+glbMaze_alloc_item(struct glbMaze *self,
+		   size_t conc_freq_threshold)
 {
     struct glbMazeItem *item;
+    size_t max_num_ids;
 
     if (self->num_items == self->item_storage_size) {
 	fprintf(stderr, "Maze's item storage capacity exceeded... Resize?\n");
@@ -216,6 +235,19 @@ glbMaze_alloc_item(struct glbMaze *self)
 
     /* init null values */
     memset(item, 0, sizeof(struct glbMazeItem));
+
+    if (conc_freq_threshold) {
+	max_num_ids = conc_freq_threshold * GLB_ID_BATCH_SIZE;
+	item->obj_ids = malloc(GLB_ID_SIZE * max_num_ids);
+	item->max_obj_ids = max_num_ids;
+	item->num_obj_ids = 0;
+	
+    }
+    else {
+	item->obj_ids = malloc(GLB_ID_SIZE);
+	item->max_obj_ids = 1;
+	item->num_obj_ids = 0;
+    }
 
     self->num_items++;
 
@@ -243,25 +275,25 @@ glbMaze_alloc_spec(struct glbMaze *self)
     return spec;
 } 
 
-/* allocate setref */
-static struct glbSetRef*
-glbMaze_alloc_setref(struct glbMaze *self)
+/* allocate ref */
+static struct glbMazeRef*
+glbMaze_alloc_ref(struct glbMaze *self)
 {
-    struct glbSetRef *setref;
+    struct glbMazeRef *ref;
 
-    if (self->num_setrefs == self->max_setrefs) {
-	fprintf(stderr, "Maze's setref storage capacity exceeded... Resize?\n");
+    if (self->num_refs == self->max_refs) {
+	fprintf(stderr, "Maze's ref storage capacity exceeded... Resize?\n");
 	return NULL;
     }
 
-    setref = &self->setref_storage[self->num_setrefs];
+    ref = &self->ref_storage[self->num_refs];
 
     /* init null values */
-    memset(setref, 0, sizeof(struct glbSetRef));
+    memset(ref, 0, sizeof(struct glbMazeRef));
 
-    self->num_setrefs++;
+    self->num_refs++;
 
-    return setref;
+    return ref;
 } 
 
 static struct glbMazeItem*
@@ -291,12 +323,12 @@ glbMaze_find_spec(struct glbMazeSpec *spec,
     return NULL;
 }
 
-static struct glbSetRef*
-glbMaze_find_setref(struct glbSetRef *ref,
-		    const char *name)
+static struct glbMazeRef*
+glbMaze_find_ref(struct glbMazeRef *ref,
+		 const char *name)
 {
     while (ref) {
-	if (!strcmp(ref->name, name))
+	if (!strcmp(ref->item->name, name))
 	    return ref;
 	ref = ref->next;
     }
@@ -384,9 +416,10 @@ glbMaze_add_spec(struct glbMaze *self,
 static int 
 glbMaze_build_context(struct glbMaze *self,	
 		      struct glbRequestHandler *request,
-		      char *result)
+		      char *result,
+		      size_t *result_size)
 {
-    char buf[GLB_TEMP_BUF_SIZE * 10];
+    char buf[GLB_RESULT_BUF_SIZE];
     size_t buf_size = 0;
     char *s;
 
@@ -400,7 +433,7 @@ glbMaze_build_context(struct glbMaze *self,
 
     size_t max_size; /* result always ends with PARAGRAPTH_END */
 
-    size_t space_size = strlen(SPACE);
+    size_t space_size = strlen(GLB_CONTEXT_SEPAR);
 
     /* сколько сейчас уже записано */
     size_t actual_size = 0;
@@ -438,11 +471,12 @@ glbMaze_build_context(struct glbMaze *self,
             
             /* поставим разделитель и распечатаем левый контекст */
             /* разделитель */
-            strcat(result, SPACE);
+            strcat(result, GLB_CONTEXT_SEPAR);
 
 	    /* от крайнего слева пробела */
 	    memcpy(buf, doc + (begin_pos - GLB_CONTEXT_RADIUS), GLB_CONTEXT_RADIUS);
 	    buf[GLB_CONTEXT_RADIUS] = '\0';
+
 	    s = strstr(buf, " ");
 	    if (!s) s = buf;
 
@@ -507,8 +541,8 @@ glbMaze_build_context(struct glbMaze *self,
 
             strcat(result, buf);
                         
-            /* разделитель */
-            strcat(result, SPACE);
+            /* separator */
+            strcat(result, GLB_CONTEXT_SEPAR);
 	    
             actual_size += buf_size + space_size;
             
@@ -520,14 +554,16 @@ glbMaze_build_context(struct glbMaze *self,
 
 close_tag:
 
-    /* добавим закрывающий тег */
+
+    /* closing tag */
     strcat(result, PARAGRAPH_END);
+    actual_size += strlen(PARAGRAPH_END);
+
+    *result_size = actual_size;
 
     return glb_OK;
 }
 
-
-/*  ищу оптималный контекст */
 
 /*  ranges -- список оффсетов [номер концепта, номер оффсета]
  *
@@ -604,62 +640,153 @@ glbMaze_find_context(struct glbMaze *self,
     return 0;
 }
 
-
-
 static int
 glbMaze_read_refs(struct glbMaze *self,
 		  const char *rec,
-		  size_t rec_size,
 		  struct glbMazeItem *item)
 {
-    struct glbSetRef *ref = NULL;
-    char *ref_name = NULL;
-    
+    struct glbMazeRef *ref = NULL;
+    struct glbMazeItem *ref_item;
+
+    char buf[GLB_TEMP_BUF_SIZE];
+    size_t buf_size;
+
+    const char *begin;
+    const char *end;
+    const char *sep;
+    long num_objs;
     int ret = glb_OK;
 
-    long num_items = 0;
+    begin = rec;
 
-    /* read subclass refs */
+    /* for each ref */
+    while (*begin) {
+	sep = strchr(begin, '[');
+	if (!sep) break;
 
+	end = strchr(begin, ']');
+	if (!end) break;
 
-    /*if (item->refs)
-	ref = glbMaze_find_setref(item->refs, ref_name);
+	buf_size = end - (sep + 1);
+	strncpy(buf, sep + 1, buf_size);
+	buf[buf_size] = '\0';
 
+	ret = glb_parse_num((const char*)buf, &num_objs);
+	if (ret != glb_OK) goto final;
+
+	buf_size = sep - begin;
+	strncpy(buf, begin, buf_size);
+	buf[buf_size] = '\0';
+
+	/*printf("    REF: \"%s\" [%d]\n", buf, num_objs);*/
+
+	if (item->refs)
+	    ref = glbMaze_find_ref(item->refs, (const char*)buf);
+
+	if (!ref) {
+	    ref = glbMaze_alloc_ref(self);
 	    if (!ref) {
-		ref = glbMaze_alloc_setref(self);
-		if (!ref) goto error;
-
-		ref->name = strdup(ref_name);
-
-		ref->next = item->refs;
-		item->refs = ref;
+		ret = glb_NOMEM;
+		goto error;
 	    }
 
-	    ret = glb_get_xmlattr_num(cur_node, "num", &num_items);
-	    if (ret != glb_OK) continue;
+	    /* find root item */
+	    ret = glbMaze_get_item(self, 
+				   (const char*)buf,
+				   buf_size,
+				   &ref_item);
+	    if (ret != glb_OK) return ret;
 
-	    ref->num_items += num_items;
+	    ref->item = ref_item;
 
-	    if (DEBUG_MAZE_LEVEL_4)
-		printf("   == REF: %s [%lu]\n", 
-		       ref_name, (unsigned long)ref->num_items);
-
+	    ref->next = item->refs;
+	    item->refs = ref;
 	}
 
+
+    
+	ref->num_objs += num_objs;
+
+    final:
+	begin = end;
+	begin++;
     }
-    */
 
     ret = glb_OK;
 
 error:
-    if (ref_name)
-	xmlFree(ref_name);
-
 
     return ret;
 }
 
+static int 
+glbMaze_add_obj_id(struct glbMaze *self,
+		 struct glbMazeItem *item,
+		 const char *obj_id)
+{
+    char *ids;
+    size_t newsize;
+    size_t offset;
 
+    /* extend ids buffer */
+    if (item->num_obj_ids == item->max_obj_ids) {
+
+	newsize = item->num_obj_ids * GLB_GROW_FACTOR * GLB_ID_SIZE;
+	ids = realloc(item->obj_ids, newsize);
+	if (!ids) return glb_NOMEM;
+
+	item->obj_ids = ids;
+	item->max_obj_ids = item->num_obj_ids * GLB_GROW_FACTOR;
+    }
+
+    offset = item->num_obj_ids * GLB_ID_SIZE;
+    memcpy(item->obj_ids + offset, obj_id, GLB_ID_SIZE);
+
+    /*printf(" added obj id %s\n", obj_id);*/
+
+    item->num_obj_ids++;
+
+    return glb_OK;
+}
+
+
+
+static int 
+glbMaze_get_item(struct glbMaze *self,
+		 const char *name,
+		 size_t name_size,
+		 struct glbMazeItem **result)
+{
+    struct glbMazeItem *item;
+    int ret;
+
+    item = self->item_dict->get(self->item_dict, name);
+
+    if (!item) {
+	item = glbMaze_alloc_item(self, 0);
+	if (!item) return glb_NOMEM;
+
+	item->name = malloc(name_size + 1);
+	if (!item->name) return glb_NOMEM;
+	item->name[name_size] = '\0';
+	memcpy(item->name, name, name_size);
+	item->name_size = name_size;
+
+	ret = self->item_dict->set(self->item_dict,
+				   item->name, item);
+
+	self->item_index[self->num_root_items] = item;
+	self->num_root_items++;
+
+	if (DEBUG_MAZE_LEVEL_4)
+	    printf("  ++ root registration of item \"%s\" (size: %d)\n",
+		   item->name, name_size);
+    }
+
+    *result = item;
+
+    return glb_OK;
+}
 
 static int 
 glbMaze_add_conc(struct glbMaze *self,
@@ -672,38 +799,27 @@ glbMaze_add_conc(struct glbMaze *self,
     struct glbMazeItem *item;
     struct glbMazeSpec *spec;
     struct glbMazeLoc *loc;
+    const char *s;
     int ret;
 
-    /* registration of a new root item */
-    item = self->item_dict->get(self->item_dict, name);
-    if (!item) {
-	item = glbMaze_alloc_item(self);
-	if (!item) return glb_NOMEM;
-
-	item->name = malloc(name_size + 1);
-	if (!item->name) return glb_NOMEM;
-	item->name[name_size] = '\0';
-	memcpy(item->name, name, name_size);
-	item->name_size = name_size;
-
-	ret = self->item_dict->set(self->item_dict,
-				   name, item);
-
-	self->item_index[self->num_root_items] = item;
-	self->num_root_items++;
-
-	if (DEBUG_MAZE_LEVEL_4)
-	    printf("  ++ root registration of item %s  REC: %s\n",
-		   item->name, rec);
-    }
-
-    
+    ret = glbMaze_get_item(self, name, name_size, &item);
+    if (ret != glb_OK) return ret;
 
     /* read subclass refs */
-    glbMaze_read_refs(self, rec, rec_size, item);
+    s = strstr(rec, "REFS:");
+    if (s) {
+	s += strlen("REFS:");
+	glbMaze_read_refs(self, s, item);
+    }
 
+    s = strstr(rec, "LOCS");
+    if (s) {
+	ret = glbMaze_add_obj_id(self, item, obj_id);
+	if (ret != glb_OK) return ret;
+    }
 
-    item->num_objs++;
+    if (DEBUG_MAZE_LEVEL_5)
+	glbMaze_show_item(self, item, 0);
 
     return glb_OK;
 }
@@ -768,15 +884,24 @@ glbMaze_build_contexts(struct glbMaze *self,
     size_t max_locs;
     int i, j, ret;
 
-    char buf[GLB_TEMP_BUF_SIZE * 10];
-    
+    char output_buf[GLB_RESULT_BUF_SIZE];
+    char *output;
+    size_t output_size;
+
+    char context_buf[GLB_RESULT_BUF_SIZE];
+    char *context;
+    size_t context_size;
+
     long curr_loc = -1;
     size_t begin_loc = 0;
-    const char *output;
-    size_t output_size;
+
     const size_t num_fields = GLB_LOC_REC_NUM_FIELDS;
 
     int context_count = 0;
+
+    context_buf[0] = '\0';
+    context = context_buf;
+    output = output_buf;
 
     max_locs = self->num_locs[0];
 
@@ -785,9 +910,9 @@ glbMaze_build_contexts(struct glbMaze *self,
     if (ret != glb_OK) return ret;
 
     if (DEBUG_MAZE_LEVEL_2)
-	printf("\n   .. building contexts.. (max: %d)\n", max_locs);
-
-    buf[0] = '\0';
+	printf("\n   .. building contexts for %s.. (max: %d)\n"
+               "  CURR RESULTS: \"%s\" (size: %d)\n", 
+	       obj_id, max_locs, self->results, self->results_size);
 
     for (i = 0; i < max_locs; i++) {
 	if (i == GLB_MAX_CONTEXTS) break;
@@ -801,57 +926,190 @@ glbMaze_build_contexts(struct glbMaze *self,
 	for (j = 0; j < request->set_pool_size; j++ ) {
 	    begin_loc = self->result_ranges[num_fields * j];
 
-	    printf(" (%d, %d) ",
+	    if (DEBUG_MAZE_LEVEL_5)
+		printf(" (%d, %d) ",
 		   self->result_ranges[num_fields * j],
 		   self->result_ranges[num_fields * j + 1]);
+
 	    if (curr_loc == begin_loc) {
 		if (DEBUG_MAZE_LEVEL_2)
 		    printf("    ?? Doublet found: %lu? :((\n", begin_loc);
 		return glb_FAIL;
 	    }
 	    curr_loc = self->result_ranges[num_fields * j];
-
 	}
 
-	if (DEBUG_MAZE_LEVEL_2)
-	    printf("\n"); 
+	if (DEBUG_MAZE_LEVEL_5)
+	    printf("\n");
 
-	ret = glbMaze_build_context(self, request, buf); 
+	ret = glbMaze_build_context(self, request, context, &context_size); 
 	if (ret != glb_OK) continue;
 
 	context_count++;
     }
 
+
     if (!context_count) return glb_FAIL;
 
-    output = "<div class=\\\"msg_row\\\">"
-	"<div class=\\\"msg_row_title\\\">%s</div>"
-	"<div class=\\\"msg_row_desc\\\">";
+    context_size = strlen(context_buf);
 
-    sprintf(self->curr_results_buf, output, obj_id);
-    output_size = strlen(self->curr_results_buf);
-    self->curr_results_buf += output_size;
-    self->results_size += output_size;
+    /*printf("\n\n curr contexts for %s: \"%s\"\n  (size: %d real: %d)\n\n", 
+	   obj_id, context_buf, context_size, output_size);
+    */
 
+    if (!context_size) return glb_FAIL;
 
-    sprintf(self->curr_results_buf, buf);
-    output_size = strlen(buf);
-    self->curr_results_buf += output_size;
-    self->results_size += output_size;
-
-    output = "</div></div>";
+    sprintf(output, 
+	    GLB_RESULT_ROW_BEGIN,
+	    obj_id);
     output_size = strlen(output);
-    sprintf(self->curr_results_buf, output);
-    self->curr_results_buf += output_size;
-    self->results_size += output_size;
- 
 
-    printf("\n\n   OUTPUT RESULTS:\n %s\n\n", 
-	   self->results);
+    ret = self->write(self, GLB_SEARCH_RESULTS, 
+		output,
+		output_size);
+    if (ret != glb_OK) return ret;
+
+    ret = self->write(self, GLB_SEARCH_RESULTS, 
+		context_buf,
+		context_size);
+    if (ret != glb_OK) return ret;
+
+    ret = self->write(self, GLB_SEARCH_RESULTS, 
+		GLB_RESULT_ROW_END,
+		strlen(GLB_RESULT_ROW_END));
+    if (ret != glb_OK) return ret;
+
+
+    if (DEBUG_MAZE_LEVEL_2)
+	printf("\n\n   OUTPUT RESULTS:\n %s\n[size: %d]\n", 
+	       self->results, self->results_size);
  
     return glb_OK;
 
 }
+
+
+static int 
+glbMaze_read_locset(struct glbMaze *self,	
+		    const char *db_filename,
+		    const char *name,
+		    size_t name_size,
+		    size_t *locset,
+		    size_t *num_locs)
+{
+    DB *dbp = NULL;
+    DBC *dbc;
+    DBT db_key, db_data;
+
+    char buf[GLB_TEMP_BUF_SIZE];
+    size_t buf_size;
+    
+    const char *begin;
+    const char *end;
+    const char *sep;
+
+    long rec_offset;
+    size_t rec_size;
+
+    int ret;
+
+    if (DEBUG_MAZE_LEVEL_3)
+	printf("\n  ...reading index from \"%s\" ", db_filename);
+
+    /* create and initialize database object */
+    if ((ret = db_create(&dbp, NULL, 0)) != 0) {
+	fprintf(stderr,
+		"db_create: %s\n", db_strerror(ret));
+	goto error;
+    }
+
+    dbp->set_errfile(dbp, stderr);
+    dbp->set_errpfx(dbp, "Maze");
+
+    if ((ret = dbp->set_pagesize(dbp, 1024)) != 0) {
+	dbp->err(dbp, ret, "set_pagesize");
+	goto error;
+    }
+
+    if ((ret = dbp->set_cachesize(dbp, 0, 1024 * 1024, 0)) != 0) {
+	dbp->err(dbp, ret, "set_cachesize");
+	goto error;
+    }
+
+    /* open the database */
+    ret = dbp->open(dbp,        /* DB structure pointer */ 
+		    NULL,       /* transaction pointer */ 
+		    db_filename, /* filename */
+		    NULL,       /* optional logical database name */
+		    DB_HASH,    /* database access method */
+		    DB_RDONLY,  /* open flags */
+		    0664);      /* file mode (using defaults) */
+
+    if (ret != oo_OK) {
+	dbp->err(dbp, ret, "%s: open", db_filename);
+	(void)dbp->close(dbp, 0);
+	return oo_FAIL;
+    }
+
+    /* initialize the DBTs */
+    memset(&db_key, 0, sizeof(DBT));
+    memset(&db_data, 0, sizeof(DBT));
+
+    if (DEBUG_MAZE_LEVEL_3)
+	printf("conc name: \"%s\" size: %d\n", name, name_size);
+
+    db_key.data = (char*)name;
+    db_key.size = name_size;
+
+    /* get the record */
+    ret = dbp->get(dbp, NULL, &db_key, &db_data, 0);
+    if (ret != glb_OK) return ret;
+
+    /* find the number of locs */
+    begin = strstr((char*)db_data.data, "LOCS");
+    if (!begin) return glb_FAIL;
+
+    sep = strchr(begin, '[');
+    if (!sep) return glb_FAIL;
+
+    end = strchr(begin, ']');
+    if (!end) return glb_FAIL;
+
+    buf_size = end - (sep + 1);
+    strncpy(buf, sep + 1, buf_size);
+    buf[buf_size] = '\0';
+
+    ret = glb_parse_num((const char*)buf, num_locs);
+    if (ret != glb_OK) return ret;
+
+    if (DEBUG_MAZE_LEVEL_3)
+	printf("   num locs in db: %d\n", *num_locs);
+
+    /* check max limit */
+    if (*num_locs > GLB_MAX_CONC_UNITS)
+	*num_locs = GLB_MAX_CONC_UNITS;
+
+    rec_size = *num_locs * GLB_LOC_REC_SIZE;
+    rec_offset = (size_t)db_data.size - rec_size;
+
+    if (DEBUG_MAZE_LEVEL_3)
+	printf("data size: %d  binary rec start: %d rec size: %d\n",  
+	       db_data.size, rec_offset, rec_size);
+
+    begin = (char*)db_data.data + rec_offset;
+
+    memcpy(locset, begin, rec_size);
+
+    ret = glb_OK;
+
+ error:
+
+    if (dbp)
+	dbp->close(dbp, 0);
+
+    return glb_OK;
+}
+
 
 static int 
 glbMaze_fetch_obj(struct glbMaze *self,	
@@ -876,44 +1134,30 @@ glbMaze_fetch_obj(struct glbMaze *self,
     for (i = 0; i < request->set_pool_size; i++) {
 	set = request->set_pool[i];
 	locset = self->locsets[i];
+
 	num_locs = &self->num_locs[i];
 	*num_locs = 0;
 
-	/* extracting prefix from concept name */
-	glb_get_conc_prefix(set->name, set->name_size, prefix);
-
 	/* build the filename */
-	sprintf(filename, "locs/%s/%s.set", prefix, set->name);
 	glb_make_id_path(path,
 			 self->storage_path,
 			 obj_id, 
-			 (const char*)filename);
+			 "index.db");
 
 	if (DEBUG_MAZE_LEVEL_2)
 	    printf("    .. reading locs from file \"%s\"...\n", path);
 
-	fd = open(path, O_RDONLY);
-	if (fd < 0) {
-	    printf("    -- couldn\'t open file %s :((\n", path);
-	    close(fd);
-	    return glb_IO_FAIL;
-	}
-
-	res = read(fd, locset, GLB_LOCSET_BUF_SIZE);
-	if (!res) {
-	    close(fd);
-	    return glb_FAIL;
-	}
-
-	*num_locs = res / GLB_LOC_REC_SIZE;
-	close(fd);
-
+	glbMaze_read_locset(self, (const char*)path, 
+			    set->name, set->name_size,
+			    locset, num_locs);
     }
 
     if (DEBUG_MAZE_LEVEL_5)
 	printf("    ++ locsets read success!\n");
 
     ret = glbMaze_build_contexts(self, request, obj_id); 
+
+    /*printf("locset: %p\n", self->locsets[0]);*/
     if (ret != glb_OK) return ret;
 
     return glb_OK;
@@ -925,13 +1169,19 @@ glbMaze_fetch_results(struct glbMaze *self,
 			struct glbRequestHandler *request,
 			struct glbData *data)
 {
-    char buf[GLB_ID_MATRIX_DEPTH + 1];
+    char buf[GLB_ID_SIZE + 1];
     char *ids;
     size_t num_ids;
     int i, ret;
 
-    buf[GLB_ID_MATRIX_DEPTH] = '\0';
+    /* printf JSON key tag */
+    ret = self->write(self, GLB_SEARCH_RESULTS, 
+		      GLB_JSON_EXACT,
+		      GLB_JSON_EXACT_SIZE);
+    if (ret != glb_OK) return ret;
 
+
+    buf[GLB_ID_SIZE] = '\0';
     ids = request->result->ids;
     num_ids = request->result->answer_actual_size;
 
@@ -946,20 +1196,32 @@ glbMaze_fetch_results(struct glbMaze *self,
 	puts("");
     }
 
+    /* for each obj id */
     for (i = 0; i < num_ids; i++) {
 	memcpy(buf,
 	       ids + i * GLB_ID_MATRIX_DEPTH, 
 	       GLB_ID_MATRIX_DEPTH);
 
-	/* для каждого id читаем его локальный индекс и текст */
+	/* read fulltext and compile citations */
 	ret = glbMaze_fetch_obj(self, request, buf, data);
 
-	printf("   .. fetch obj_id [%s]: %d\n", buf, ret);
+	if (DEBUG_MAZE_LEVEL_3)
+	    printf("   .. fetch obj_id [%s]: %d\n", buf, ret);
 
-	if (ret != glb_OK) continue;
+	/* memory filled */
+	if (ret == glb_NOMEM) break;
 
-	data->num_results++;
+	if (ret == glb_OK)
+	    data->num_results++;
     }
+
+
+    /* close string */
+    ret = self->write(self, GLB_SEARCH_RESULTS, 
+		      GLB_JSON_STR_END,
+		      GLB_JSON_STR_END_SIZE);
+    if (ret != glb_OK) return ret;
+
 
     return glb_OK;
 }
@@ -967,16 +1229,18 @@ glbMaze_fetch_results(struct glbMaze *self,
 
 static int 
 glbMaze_add_domain_terms(struct glbMaze *self,
-			 struct glbSet *set,
+			 struct glbSet *child,
 			 const char *domain_name)
 {
     struct glbMazeItem *item;
-    struct glbSetRef *ref;
+    struct glbSet *set;
+    struct glbMazeRef *ref;
     int ret;
 
     if (DEBUG_MAZE_LEVEL_2)
 	printf("\n    .. add terms from domain \"%s\"..\n", 
 	       domain_name);
+
 
     item = self->item_dict->get(self->item_dict, domain_name);
     if (!item) {
@@ -986,20 +1250,55 @@ glbMaze_add_domain_terms(struct glbMaze *self,
 	return glb_NO_RESULTS;
     }
 
-
     if (item->refs) {
-	
-	printf("    ++ domain %s has refs!\n", domain_name);
-
 	for (ref = item->refs; ref; ref = ref->next) {
-	    printf("   == REF: %s [%lu]\n", 
-		   ref->name, (unsigned long)ref->num_items);
+
+	    if (DEBUG_MAZE_LEVEL_4)
+		printf("      == REF: %s [%lu]\n", 
+		   ref->item->name, (unsigned long)ref->num_objs);
+
+	    /* same concept */
+	    if (child->name == ref->item->name) continue;
+
+	    /* nested refs? */
+
+	    if (ref->item->num_obj_ids == 0) continue;
+ 
+	    /* alloc set */
+	    set = glbMaze_alloc_agent_set(self);
+	    if (!set) return glb_NOMEM;
+
+	    set->obj_ids = (const char*)ref->item->obj_ids;
+	    set->num_obj_ids = ref->item->num_obj_ids;
+	    set->obj_ids_size = ref->item->num_obj_ids * GLB_ID_SIZE;
+	    set->name = ref->item->name;
+	    set->name_size = ref->item->name_size;
+
+	    set->build_index(set);
 
 
+	    /* write domain item */
+	    ret = self->write(self, GLB_DOMAINS, 
+			      "<LI><A HREF=\\\"#\\\"> ",
+			      strlen("<LI><A HREF=\\\"#\\\"> "));
+	    if (ret != glb_OK) return ret;
+
+	    ret = self->write(self, GLB_DOMAINS, 
+			      ref->item->name,
+			      ref->item->name_size);
+	    if (ret != glb_OK) return ret;
+
+	    ret = self->write(self, GLB_DOMAINS, 
+			      "</A></LI> ",
+			      strlen("</A></LI> "));
+	    if (ret != glb_OK) return ret;
+
+
+	    set->next_ref = child->refs; 
+	    child->refs = set;
 	}
-
-	set->refs = item->refs;
     }
+
 
     return glb_OK;
 }
@@ -1012,6 +1311,7 @@ glbMaze_add_search_term(struct glbMaze *self,
 {
     struct glbMazeItem *item;
     struct glbSet *set;
+    struct glbSet *testset;
     int ret;
 
     if (DEBUG_MAZE_LEVEL_2)
@@ -1021,31 +1321,115 @@ glbMaze_add_search_term(struct glbMaze *self,
     item = self->item_dict->get(self->item_dict, conc_name);
     if (!item) {
 	if (DEBUG_MAZE_LEVEL_2)
-	    printf("\n  .. no such set found: %s\n", conc_name);
-
+	    printf("\n    -- concept not found: %s :(\n", conc_name);
 	return glb_NO_RESULTS;
     }
 
-    /* take one of the agents */
+    /* take one of the agents 
+        TODO: check cached sets! */
+
+    testset = self->agent_set_storage[1];
+
+
     set = glbMaze_alloc_agent_set(self);
     if (!set) return glb_NOMEM;
 
-    ret = set->init(set,
-		    (const char*)self->path, 
-		    item->name, item->name_size);
-    if (ret != glb_OK) return ret;
+    set->obj_ids = (const char*)item->obj_ids;
+    set->num_obj_ids = item->num_obj_ids;
+    set->obj_ids_size = item->num_obj_ids * GLB_ID_SIZE;
 
-    set->num_objs = item->num_objs;
+    set->name = item->name;
+    set->name_size = item->name_size;
+
+    /*printf(" set 1: %p %p\n", testset, testset->init);*/
+
+    set->build_index(set);
+
+    /*testset = self->agent_set_storage[1];
+    printf(" set 1: %p %p\n", testset, testset->init);
+    exit(0); */
 
     item->num_requests++;
-
 
     if (domain_name)
 	glbMaze_add_domain_terms(self, set, domain_name);
 
+    /*set->str(set);*/
 
     self->search_set_pool[self->search_set_pool_size] = set;
     self->search_set_pool_size++;
+
+
+    return glb_OK;
+}
+
+
+static int
+glbMaze_write(struct glbMaze *self,
+	      output_dest_t dest,
+	      const char    *buf,
+	      size_t        buf_size)
+{
+    char **output_buf;
+    size_t *output_size;
+    size_t *free_space;
+
+    switch (dest) {
+    case GLB_SEARCH_RESULTS:
+	output_buf = &self->curr_results_buf;
+	output_size = &self->results_size;
+	free_space = &self->results_free_space;
+	break;
+    case GLB_DOMAINS:
+	output_buf = &self->curr_domains_buf;
+	output_size = &self->domains_size;
+	free_space = &self->domains_free_space;
+	break;
+    default:
+	return oo_FAIL;
+    }
+  
+    if (buf_size > *free_space) return oo_NOMEM;
+
+    memcpy(*output_buf, buf, buf_size);
+
+    *output_buf += buf_size;
+    *output_buf[0] = '\0';
+    *output_size += buf_size;
+    *free_space -= buf_size;
+
+    /*self->curr_pos += buf_size;*/
+
+    return glb_OK;
+}
+
+static int
+glbMaze_search_prelude(struct glbMaze *self)
+{
+    int ret;
+    /* reset agents */
+    self->num_agents = 0;
+    self->search_set_pool_size = 0;
+
+    /* reset operational buffers */
+    self->text[0] = '\0';
+
+    self->results[0] = '\0';
+    self->curr_results_buf = self->results;
+    self->results_size = 0;
+    self->results_free_space = self->max_results_size;
+
+    self->domains[0] = '\0';
+    self->curr_domains_buf = self->domains;
+    self->domains_size = 0;
+    self->domains_free_space = self->max_domains_size;
+  
+
+    ret = self->write(self, GLB_SEARCH_RESULTS, 
+		GLB_JSON_RESULT_BEGIN,
+		GLB_JSON_RESULT_BEGIN_SIZE);
+    if (ret != glb_OK) return ret;
+
 
     return glb_OK;
 }
@@ -1059,7 +1443,6 @@ glbMaze_search(struct glbMaze *self,
     xmlDocPtr doc;
     xmlNodePtr root, cur_node;
     struct glbSet *set;
-    struct glbRequestHandler *request = NULL;
 
     char *conc_name = NULL;
     char *domain_name = NULL;
@@ -1070,6 +1453,8 @@ glbMaze_search(struct glbMaze *self,
     if (DEBUG_MAZE_LEVEL_1)
 	printf("    .. Maze %d:  search in progress...\n", 
 	       self->id);
+
+    glbMaze_search_prelude(self);
 
     doc = xmlReadMemory(data->interp, 
 			data->interp_size,
@@ -1097,9 +1482,6 @@ glbMaze_search(struct glbMaze *self,
 	goto error;
     }
 
-    /* reset agents */
-    self->num_agents = 0;
-    self->search_set_pool_size = 0;
 
     for (cur_node = root->children; cur_node; cur_node = cur_node->next) {
         if (cur_node->type != XML_ELEMENT_NODE) continue;
@@ -1130,7 +1512,28 @@ glbMaze_search(struct glbMaze *self,
 	}
     }
 
-    printf("\n    ++ NUM INTERSECTION SETS: %d\n", 
+
+    /* output domain items  */
+    ret = self->write(self, GLB_SEARCH_RESULTS,
+		GLB_JSON_SIMILAR_BEGIN,
+		GLB_JSON_SIMILAR_BEGIN_SIZE);
+    if (ret != glb_OK) return ret;
+
+    ret = self->write(self, GLB_SEARCH_RESULTS,
+		self->domains,
+		self->domains_size);
+    if (ret != glb_OK) return ret;
+
+    /* close string */
+    ret = self->write(self, GLB_SEARCH_RESULTS, 
+		      GLB_JSON_STR_END,
+		      GLB_JSON_STR_END_SIZE);
+    if (ret != glb_OK) return ret;
+    
+
+
+    if (DEBUG_MAZE_LEVEL_3)
+	printf("\n    ++ NUM INTERSECTION SETS: %d\n", 
 	   self->search_set_pool_size);
 
     if (self->search_set_pool_size == 0) return glb_NO_RESULTS;
@@ -1140,51 +1543,51 @@ glbMaze_search(struct glbMaze *self,
 	  self->search_set_pool_size, 
 	  sizeof(struct glbSet*), glbSet_cmp);
 
-    if (DEBUG_MAZE_LEVEL_2) {
+    if (DEBUG_MAZE_LEVEL_3) {
 	printf("    == Sets after sorting:\n");
 	for (i = 0; i < self->search_set_pool_size; i++) {
 	    set = self->search_set_pool[i];
-	    printf("      %d: %s [num objs: %d]\n", 
-		   i, set->name, set->num_objs);
+	    printf("      (%d:\n", i);
+	    set->str(set);
 	}
     }
 
-    ret = glbRequestHandler_new(&request,
-				GLB_RESULT_BATCH_SIZE,
-				0,
-				self->search_set_pool,
-				self->search_set_pool_size);
+    ret = self->request->init(self->request,
+			      GLB_RESULT_BATCH_SIZE,
+			      0, /* offset */
+			      self->search_set_pool,
+			      self->search_set_pool_size);
     if (ret != glb_OK) return ret;
 
     /* main job: logical AND intersection */
     if (DEBUG_MAZE_LEVEL_2)
 	puts("\n    ..  LOGICAL INTERSECTION  in progress..");
 
-    ret = request->intersect(request);
+    ret = self->request->intersect(self->request);
 
-    if (!request->result->answer_actual_size) {
+    if (!self->request->result->answer_actual_size) {
 	ret = glb_NO_RESULTS;
 	goto error;
     }
 
     if (DEBUG_MAZE_LEVEL_1) {
 	printf("    ++ LOGICAL INTERSECTION RESULTS: %d\n",
-	       request->result->answer_actual_size);
+	       self->request->result->answer_actual_size);
     }
 
-    /* reset operational buffers */
-    self->text[0] = '\0';
-    self->results[0] = '\0';
-    self->curr_results_buf = self->results;
-    self->results_size = 0;
 
-    ret = glbMaze_fetch_results(self, request, data);
+
+    ret = glbMaze_fetch_results(self, self->request, data);
     if (ret != glb_OK) goto error;
 
+
+    
     if (DEBUG_MAZE_LEVEL_1) {
 	printf("    ++ Search query yielded the following results: %d\n\n",
 	       data->num_results);
     }
+
+
 
 error:
 
@@ -1194,10 +1597,12 @@ error:
     if (domain_name)
 	xmlFree(domain_name);
 
-    if (request)
-	request->del(request);
-
     xmlFreeDoc(doc);
+
+    /* write results footer */
+    ret = self->write(self, GLB_SEARCH_RESULTS, 
+		GLB_JSON_RESULT_END,
+		GLB_JSON_RESULT_END_SIZE);
 
     return ret;
 }
@@ -1269,9 +1674,10 @@ glbMaze_read_index(struct glbMaze *self,
     while ((ret = dbc->c_get(dbc, 
 			     &db_key, &db_data, 
 			     DB_NEXT)) == glb_OK) {
-
+	memcpy(buf, db_key.data, db_key.size);
+	buf[db_key.size] = '\0';
 	ret = glbMaze_add_conc(self,
-			       (const char*)db_key.data,
+			       (const char*)buf,
 			       (size_t)db_key.size,
 			       (const char*)db_data.data,
 			       (size_t)db_data.size,
@@ -1377,7 +1783,6 @@ glbMaze_new(struct glbMaze **maze)
 
 
 
-
     /* text content buffer */
     self->text = malloc(GLB_MAX_TEXT_BUF_SIZE + 1);
     if (!self->text) {
@@ -1392,6 +1797,24 @@ glbMaze_new(struct glbMaze **maze)
 	goto error;
     }
     self->curr_results_buf = self->results;
+    self->max_results_size =  GLB_RESULT_BUF_SIZE;
+    self->results_free_space = self->max_results_size;
+
+
+
+    /* domains buffer */
+    self->domains = malloc(GLB_DOMAIN_BUF_SIZE + 1);
+    if (!self->domains) {
+	ret = glb_NOMEM;
+	goto error;
+    }
+    self->curr_domains_buf = self->domains;
+    self->max_domains_size =  GLB_DOMAIN_BUF_SIZE;
+    self->domains_free_space = self->max_domains_size;
+
+
+
+
 
     /* allocate agent locsets */
     self->locsets = malloc(GLB_MAZE_NUM_AGENTS *\
@@ -1436,18 +1859,19 @@ glbMaze_new(struct glbMaze **maze)
 	ret = glbSet_new(&set);
 	if (ret != glb_OK) goto error;
 	self->agent_set_storage[i] = set;
+	/*printf(" set #%d: %p\n", i, set);*/
     }
     self->max_agents = GLB_MAZE_NUM_AGENTS;
 
 
-    /* allocate setrefs */
-    self->setref_storage = malloc(sizeof(struct glbSetRef) *\
-				GLB_MAZE_SETREF_STORAGE_SIZE);
-    if (!self->setref_storage) {
+    /* allocate refs */
+    self->ref_storage = malloc(sizeof(struct glbMazeRef) *\
+				GLB_MAZE_REF_STORAGE_SIZE);
+    if (!self->ref_storage) {
 	ret = glb_NOMEM;
 	goto error;
     }
-    self->max_setrefs = GLB_MAZE_SETREF_STORAGE_SIZE;
+    self->max_refs = GLB_MAZE_REF_STORAGE_SIZE;
 
 
 
@@ -1476,11 +1900,17 @@ glbMaze_new(struct glbMaze **maze)
 	self->head = set;
     }
 
+
+    ret = glbRequestHandler_new(&self->request);
+    if (ret != glb_OK) return ret;
+
+
     self->cache_set_storage_size = GLB_MAZE_NUM_CACHE_SETS;
 
     self->del           = glbMaze_del;
     self->init          = glbMaze_init;
     self->str           = glbMaze_str;
+    self->write         = glbMaze_write;
 
     self->read_index    = glbMaze_read_index;
     self->sort          = glbMaze_sort_items;

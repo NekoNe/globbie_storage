@@ -200,7 +200,7 @@ glbPartition_add(struct glbPartition *self,
 
     /* write interp */
     glb_write_file((const char*)path_buf, 
-		   "interp.sem", data->obj, data->obj_size);
+		   "interp.sem", data->interp, data->interp_size);
 
     /* write topics */
     glb_write_file((const char*)path_buf, 

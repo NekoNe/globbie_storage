@@ -18,7 +18,10 @@ struct glbIndexTreeNode
 
 typedef struct glbIndexTree
 {
-    size_t node_count;
+
+    size_t num_nodes;
+    size_t max_nodes;
+
     size_t max_height; /* height of binary tree */
     size_t array_offset;
 

@@ -61,50 +61,25 @@ void *worker_routine(void *arg)
 
 	/* waiting for spec */
         data->spec = s_recv(client, &data->spec_size);
+	data->obj = s_recv(client, &data->obj_size);
+	data->text = s_recv(client, &data->text_size);
+	data->topics = s_recv(client, &data->topic_size);
+	data->index = s_recv(client, &data->index_size);
 
-	/* add new object */
-	if (strstr(data->spec, "ADD")) {
-	    data->obj = s_recv(client, &data->obj_size);
-	    data->text = s_recv(client, &data->text_size);
-	    data->topics = s_recv(client, &data->topic_size);
-	    data->index = s_recv(client, &data->index_size);
 
-	    printf("    !! iCollection Reception #%d: got spec \"%s\"\n", 
-		   args->worker_id, data->spec);
+	printf("    !! iCollection Reception #%d: got spec \"%s\"\n", 
+	       args->worker_id, data->spec);
 
-	    ret = coll->find_route(coll, data->topics, &dest_coll_addr);
+	ret = coll->find_route(coll, data->topics, &dest_coll_addr);
 
-	    /* stay in this collection */
-	    if (!dest_coll_addr) {
-		s_sendmore(publisher, data->spec, data->spec_size);
-		s_sendmore(publisher, data->obj, data->obj_size);
-		s_sendmore(publisher, data->text, data->text_size);
-		s_sendmore(publisher, data->topics, data->topic_size);
-		s_send(publisher, data->index, data->index_size);
-	    }
-
+	/* stay in this collection */
+	if (!dest_coll_addr) {
+	    s_sendmore(publisher, data->spec, data->spec_size);
+	    s_sendmore(publisher, data->obj, data->obj_size);
+	    s_sendmore(publisher, data->text, data->text_size);
+	    s_sendmore(publisher, data->topics, data->topic_size);
+	    s_send(publisher, data->index, data->index_size);
 	}
-
-	/* find objects */
-	if (strstr(data->spec, "FIND")) {
-
-	    printf("    !! iCollection Reception #%d: got FIND spec \"%s\"\n", 
-		   args->worker_id, data->spec);
-
-	    data->topics = s_recv(client, &data->topic_size);
-	    
-	    data->interp = s_recv(client, &data->interp_size);
-
-	    ret = coll->find_route(coll, data->topics, &dest_coll_addr);
-
-	    /* stay in this collection */
-	    if (!dest_coll_addr) {
-		s_sendmore(search, data->spec, data->spec_size);
-		s_sendmore(search, data->topics, data->topic_size);
-		s_send(search, data->interp, data->interp_size);
-	    }
-	}
-
 
         fflush(stdout);
     }
@@ -115,7 +90,7 @@ void *worker_routine(void *arg)
     return;
 }
 
-void *glbColl_add_metadata_service(void *arg)
+void *glbColl_add_delivery_service(void *arg)
 {
     void *context;
     void *frontend;
@@ -130,7 +105,7 @@ void *glbColl_add_metadata_service(void *arg)
     zmq_bind(frontend, "tcp://127.0.0.1:6902");
     zmq_bind(backend, "tcp://127.0.0.1:6903");
 
-    printf("    ++ Root iCollection Metadata Service is up and running!...\n\n");
+    printf("    ++ Root iCollection Delivery Service is up and running!...\n\n");
 
     zmq_device(ZMQ_QUEUE, frontend, backend);
 
@@ -178,7 +153,7 @@ main(int           const argc,
     struct glbColl *coll;
 
     pthread_t worker;
-    pthread_t metadata_service;
+    pthread_t delivery_service;
     pthread_t search_service;
 
     struct worker_args w_args[NUM_WORKERS];
@@ -197,10 +172,10 @@ main(int           const argc,
 
     coll->context = context;
 
-    /* add metadata service */
-    ret = pthread_create(&metadata_service,
+    /* add delivery service */
+    ret = pthread_create(&delivery_service,
 			 NULL,
-			 glbColl_add_metadata_service,
+			 glbColl_add_delivery_service,
 			 (void*)coll);
 
     /* add search service */

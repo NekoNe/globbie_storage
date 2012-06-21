@@ -262,6 +262,41 @@ final:
     return ret;
 }
 
+/**
+ */
+extern int
+glb_parse_num(const char *val,
+	      long *result)
+{
+    long numval;
+    char *invalid_num_char = NULL;
+    int ret = glb_OK;
+
+    if (!val) return glb_FAIL;
+	    
+    errno = 0;
+    numval = strtol(val, &invalid_num_char, GLB_NUM_ENCODE_BASE);
+    
+    /* check for various numeric decoding errors */
+    if ((errno == ERANGE && (numval == LONG_MAX || numval == LONG_MIN))
+	|| (errno != 0 && numval == 0)) {
+	perror("strtol");
+	ret = glb_FAIL;
+	goto final;
+    }
+    
+    if (invalid_num_char == val) {
+	fprintf(stderr, "  -- No digits were found in \"%s\"\n", val);
+	ret = glb_FAIL;
+	goto final;
+    }
+    
+    *result = numval;
+
+final:
+   
+    return ret;
+}
 
 
 extern int 
